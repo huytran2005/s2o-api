@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project version="4">
-  <component name="com.obiscr.chatgpt.settings.EasyCodeState">
-    <option name="projectFiles" value="$PROJECT_DIR$/controllers/__init__.py;D:/Python/s2o-api/controllers/auth_controller.py;D:/Python/s2o-api/db/__init__.py;D:/Python/s2o-api/db/database.py;D:/Python/s2o-api/db/session.py;D:/Python/s2o-api/models/__init__.py;D:/Python/s2o-api/models/user.py;D:/Python/s2o-api/schemas/__init__.py;D:/Python/s2o-api/schemas/auth_schema.py;D:/Python/s2o-api/utils/__init__.py;D:/Python/s2o-api/utils/dependencies.py;D:/Python/s2o-api/utils/jwt.py;D:/Python/s2o-api/utils/security.py;D:/Python/s2o-api/views/__init__.py;D:/Python/s2o-api/__init__.py;D:/Python/s2o-api/load_test.py;D:/Python/s2o-api/main.py;D:/Python/s2o-api/README.md" />
-  </component>
-</project>
