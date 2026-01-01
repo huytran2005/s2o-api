@@ -24,7 +24,6 @@ def create_category(
 
     name = data.name.strip()
 
-    # ✅ CHECK TRÙNG TRƯỚC
     existing = (
         db.query(Category)
         .filter(
@@ -40,7 +39,6 @@ def create_category(
             detail="Category already exists"
         )
 
-    # ✅ SAU ĐÓ MỚI ADD
     category = Category(
         restaurant_id=restaurant_id,
         name=name,

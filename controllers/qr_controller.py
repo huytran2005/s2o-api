@@ -1,4 +1,3 @@
-from http.client import HTTPException
 import uuid
 import segno
 from pathlib import Path
@@ -9,8 +8,8 @@ from db.database import get_db
 from models.restaurant_table import RestaurantTable
 from models.qr_code import QRCode
 from schemas.table_schema import TableCreate, TableOut
+
 router = APIRouter(prefix="/tables", tags=["Tables"])
-@router.post("", response_model=TableOut)
 @router.post("", response_model=TableOut)
 def create_table(
     payload: TableCreate,
@@ -38,7 +37,7 @@ def create_table(
     db.commit()
     db.refresh(qr)
 
-    # 3. TẠO FILE QR IMAGE (SEGNO)
+    # 3. TẠO FILE QR IMAGE
     qr_dir = Path("media/qrs")
     qr_dir.mkdir(parents=True, exist_ok=True)
 
@@ -60,20 +59,3 @@ def create_table(
     db.commit()
 
     return table
-
-@router.delete("/{table_id}")
-def deactivate_table(
-    table_id: str,
-    db: Session = Depends(get_db),
-):
-    table = db.query(RestaurantTable).filter_by(id=table_id).first()
-    if not table:
-        raise HTTPException(status_code=404, detail="Table not found")
-
-    table.status = "inactive"
-    db.commit()
-
-    return {"message": "Table deactivated"}
-@router.get("", response_model=list[TableOut])
-def list_all_tables(db: Session = Depends(get_db)):
-    return db.query(RestaurantTable).all()
