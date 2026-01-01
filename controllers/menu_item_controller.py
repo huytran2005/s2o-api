@@ -17,7 +17,6 @@ from utils.dependencies import get_current_user
 from utils.permissions import require_roles
 from utils.file_upload import save_menu_image
 
-# 🔴 BẮT BUỘC PHẢI CÓ
 router = APIRouter(
     prefix="/menus",
     tags=["Menu"]
