@@ -1,6 +1,7 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status,Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from utils.jwt import verify_token
 
 from db.database import get_db
 from models.user import User
@@ -36,3 +37,12 @@ def get_current_user(
         )
 
     return user
+
+# utils/dependencies.py
+def get_current_user_optional(request: Request):
+    auth = request.headers.get("Authorization")
+    if not auth:
+        return None
+
+    token = auth.replace("Bearer ", "")
+    return verify_token(token)
