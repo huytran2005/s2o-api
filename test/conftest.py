@@ -12,8 +12,8 @@ def owner_token(client):
     res = client.post(
         "/auth/login",
         json={
-            "email": "user@example.com",
-            "password": "123"
+            "email": "owner@gmail.com",
+            "password": "123456"
         }
     )
     assert res.status_code == 200
@@ -25,7 +25,7 @@ def customer_token(client):
     res = client.post(
         "/auth/login",
         json={
-            "email": "customer1@test.com",
+            "email": "customer@gmail.com",
             "password": "123456"
         }
     )
