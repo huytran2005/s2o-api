@@ -1,5 +1,6 @@
 from datetime import datetime
 from uuid import UUID
+from utils.dependencies import get_current_user_optional
 
 from fastapi import (
     APIRouter,
@@ -33,7 +34,11 @@ ACTIVE_STATUSES = ["pending", "confirmed", "preparing"]
 async def create_or_update_order(
     payload: OrderCreate,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),  # 👈 thêm
+
 ):
+    print("DEBUG current_user:", current_user)
+
     # 1. Validate guest session
     session = db.query(GuestSession).filter(
         GuestSession.session_token == payload.session_token,
@@ -61,8 +66,10 @@ async def create_or_update_order(
             table_id=qr.table_id,
             qr_id=qr.id,
             status="pending",
-            total_amount=0
+            total_amount=0,
+            user_id=current_user.id if current_user else None
         )
+
         db.add(order)
         db.flush()  # để có order.id
         is_new_order = True
@@ -298,3 +305,14 @@ def list_kitchen_orders(
     )
 
     return orders
+@router.get("/me")
+def my_orders(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    return (
+        db.query(Order)
+        .filter(Order.user_id == current_user.id)
+        .order_by(Order.created_at.desc())
+        .all()
+    )
