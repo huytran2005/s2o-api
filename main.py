@@ -9,7 +9,8 @@ from controllers.menu_item_controller import router as menu_router
 from controllers.table_controller import router as table_router
 from controllers.qr_controller import router as qr_router
 from controllers.guest import router as guest_router
-from controllers.order_controller import router as order_router  # ✅ THÊM
+from controllers.order_controller import router as order_router
+from controllers.points_controller import router as point_router
 
 from db.init_db import init_db
 
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     app.include_router(menu_router)
     app.include_router(order_router)
     app.include_router(review_router)
+    app.include_router(point_router)
 
     return app
 

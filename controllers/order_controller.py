@@ -1,6 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 from utils.dependencies import get_current_user_optional
+from utils.points import earn_points_from_order
+from models.point_transaction import PointTransaction
 
 from fastapi import (
     APIRouter,
@@ -22,6 +24,8 @@ from utils.ws_manager import manager
 from utils.dependencies import get_current_user
 from utils.permissions import require_roles
 from utils.jwt import verify_token
+from utils.points import earn_points_from_order
+from models.point_transaction import PointTransaction
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -245,20 +249,6 @@ def update_status(db, order, next_status: str):
             "status": order.status
         }
     )
-@router.patch("/{order_id}/accept")
-def accept_order(
-    order_id: UUID,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    require_roles(current_user, ["staff", "owner"])
-
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    update_status(db, order, "confirmed")
-    return {"ok": True, "status": "confirmed"}
 @router.patch("/{order_id}/preparing")
 def preparing_order(
     order_id: UUID,
@@ -285,8 +275,20 @@ def served_order(
     if not order:
         raise HTTPException(404, "Order not found")
 
+    # chống cộng trùng
+    existed = db.query(PointTransaction).filter(
+        PointTransaction.order_id == order.id,
+        PointTransaction.reason == "ORDER_SERVED"
+    ).first()
+
     update_status(db, order, "served")
+
+    if order.user_id and not existed:
+        earn_points_from_order(db, order.user_id, order)
+        db.commit()
+
     return {"ok": True, "status": "served"}
+
 @router.get("/kitchen")
 def list_kitchen_orders(
     db: Session = Depends(get_db),
@@ -316,3 +318,31 @@ def my_orders(
         .order_by(Order.created_at.desc())
         .all()
     )
+@router.patch("/{order_id}/served")
+def served_order(
+    order_id: UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    require_roles(current_user, ["staff", "owner"])
+
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    # chống cộng điểm 2 lần
+    existed = db.query(PointTransaction).filter(
+        PointTransaction.order_id == order.id,
+        PointTransaction.reason == "ORDER_SERVED"
+    ).first()
+
+    update_status(db, order, "served")
+
+    if (
+        order.user_id
+        and not existed
+    ):
+        earn_points_from_order(db, order.user_id, order)
+
+    db.commit()
+    return {"ok": True, "status": "served"}
