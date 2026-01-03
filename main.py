@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from controllers.review_controller import router as review_router
 
 from controllers.auth_controller import router as auth_router
 from controllers.restaurant_controller import router as restaurant_router
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(category_router)
     app.include_router(menu_router)
     app.include_router(order_router)
+    app.include_router(review_router)
 
     return app
 
