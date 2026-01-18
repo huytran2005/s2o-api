@@ -16,6 +16,7 @@ class MenuOut(BaseModel):
     price: Decimal
     image_url: Optional[str] = None
     is_available: bool
-
+    category_id: UUID | None = None
+    category_name: str | None = None
     class Config:
         from_attributes = True

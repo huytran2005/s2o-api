@@ -37,3 +37,8 @@ segno==1.6.6
 # Runtime
 anyio==4.12.0
 h11==0.16.0
+
+alembic
+python-dotenv
+prometheus-fastapi-instrumentator
+redis>=4.5

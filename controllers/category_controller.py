@@ -54,9 +54,7 @@ def create_category(
 def list_categories(
     restaurant_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
 ):
-    require_roles(current_user, ["staff", "owner"])
 
     return (
         db.query(Category)

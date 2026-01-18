@@ -5,13 +5,21 @@ from decimal import Decimal
 
 POINT_RATE = Decimal("0.01")
 
-
 def earn_points_from_order(db: Session, user_id, order):
+    # ===== CHỐNG CỘNG TRÙNG =====
+    existed = db.query(PointTransaction).filter(
+        PointTransaction.order_id == order.id,
+        PointTransaction.reason == "ORDER_SERVED"
+    ).first()
+
+    if existed:
+        return 0
+
     earned = int(order.total_amount * POINT_RATE)
     if earned <= 0:
         return 0
 
-    # lấy hoặc tạo tổng điểm
+    # ===== LẤY HOẶC TẠO USER_POINT =====
     user_point = db.query(UserPoint).filter(
         UserPoint.user_id == user_id
     ).first()
@@ -26,7 +34,7 @@ def earn_points_from_order(db: Session, user_id, order):
 
     user_point.total_points += earned
 
-    # ghi lịch sử
+    # ===== GHI LỊCH SỬ =====
     tx = PointTransaction(
         user_id=user_id,
         order_id=order.id,

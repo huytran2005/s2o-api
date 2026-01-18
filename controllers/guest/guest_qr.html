@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Open App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <p id="status">Opening app...</p>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+
+    if (!code) {
+      document.body.innerText = "Invalid QR";
+      throw new Error("Missing code");
+    }
+
+const FALLBACK_BASE_URL = "__WEB_BASE_URL__";
+
+const fallbackUrl =
+  FALLBACK_BASE_URL +
+  "/index.html?code=" +
+  encodeURIComponent(code);
+
+    const intent =
+      "intent://qr/open?code=" + encodeURIComponent(code) +
+      "#Intent;" +
+      "scheme=s2o;" +
+      "package=com.example.s2o;" +
+      "S.browser_fallback_url=" + encodeURIComponent(fallbackUrl) + ";" +
+      "end";
+
+    window.location.replace(intent);
+  </script>
+</body>
+</html>
