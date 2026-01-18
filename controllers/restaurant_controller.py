@@ -7,6 +7,7 @@ from fastapi import (
     HTTPException,
     UploadFile,
     File,
+    Response
 )
 from sqlalchemy.orm import Session
 
@@ -20,11 +21,28 @@ from schemas.restaurant_schema import (
 from utils.dependencies import get_current_user
 from utils.permissions import require_roles
 from utils.file_upload import save_restaurant_image
+from utils.redis import redis_client
+import json
+
+CACHE_TTL = 30
 
 router = APIRouter(
     prefix="/restaurants",
     tags=["Restaurant"]
 )
+
+@router.get("/", response_model=list[RestaurantResponse])
+def list_restaurants(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    require_roles(current_user, ["owner", "admin"])
+
+    return (
+        db.query(Restaurant)
+        .filter(Restaurant.owner_id == current_user.id)
+        .all()
+    )
 
 # ======================
 # CREATE RESTAURANT
@@ -50,14 +68,36 @@ def create_restaurant(
 # ======================
 # LIST RESTAURANTS
 # ======================
-@router.get("/", response_model=list[RestaurantResponse])
-def list_restaurants(
+@router.get("/{restaurant_id}", response_model=RestaurantResponse)
+async def get_restaurant(
+    restaurant_id: UUID,
+    response: Response,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
 ):
-    require_roles(current_user, ["owner", "admin"])
-    return db.query(Restaurant).all()
+    cache_key = f"restaurant:{restaurant_id}"
 
+    cached = await redis_client.get(cache_key)
+    if cached:
+        response.headers["X-Cache"] = "HIT"
+        return json.loads(cached)
+
+    restaurant = db.query(Restaurant).filter(
+        Restaurant.id == restaurant_id
+    ).first()
+
+    if not restaurant:
+        raise HTTPException(404, "Restaurant not found")
+
+    data = RestaurantResponse.model_validate(restaurant).model_dump()
+
+    await redis_client.setex(
+        cache_key,
+        60,
+        json.dumps(data, default=str)
+    )
+
+    response.headers["X-Cache"] = "MISS"
+    return data
 
 # ======================
 # UPDATE RESTAURANT INFO

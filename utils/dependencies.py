@@ -8,6 +8,34 @@ from models.user import User
 from utils.jwt import decode_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+from fastapi import Cookie, Depends, HTTPException
+from sqlalchemy.orm import Session
+from datetime import datetime
+
+from db.database import get_db
+from models.guest_session import GuestSession
+
+
+def get_guest_session(
+    guest_session: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+):
+    if not guest_session:
+        raise HTTPException(status_code=401, detail="Missing session")
+
+    session = (
+        db.query(GuestSession)
+        .filter(
+            GuestSession.session_token == guest_session,
+            GuestSession.expires_at > datetime.utcnow(),
+        )
+        .first()
+    )
+
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid session")
+
+    return session
 
 
 def get_current_user(
@@ -46,3 +74,35 @@ def get_current_user_optional(request: Request):
 
     token = auth.replace("Bearer ", "")
     return verify_token(token)
+# utils/dependencies_mobile.py
+
+from fastapi import Header, HTTPException, Depends
+from sqlalchemy.orm import Session
+from datetime import datetime
+
+from db.database import get_db
+from models.guest_session import GuestSession
+
+
+def get_guest_session_mobile(
+    authorization: str = Header(...),
+    db: Session = Depends(get_db),
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    token = authorization.replace("Bearer ", "")
+
+    session = (
+        db.query(GuestSession)
+        .filter(
+            GuestSession.session_token == token,
+            GuestSession.expires_at > datetime.utcnow(),
+        )
+        .first()
+    )
+
+    if not session:
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    return session

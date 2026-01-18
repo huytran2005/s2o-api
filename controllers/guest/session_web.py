@@ -1,21 +1,22 @@
 import secrets
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
+from fastapi import Response, Depends, HTTPException, APIRouter
+from sqlalchemy.orm import Session
 
 from db.database import get_db
 from models.qr_code import QRCode
 from models.guest_session import GuestSession
 
 router = APIRouter(prefix="/guest", tags=["Guest"])
-@router.api_route("/scan", methods=["GET", "POST"])
-def scan_qr(code: str, db: Session = Depends(get_db)):
+
+@router.post("/session")
+def create_guest_session(
+    code: str,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     qr = (
         db.query(QRCode)
-        .options(
-            joinedload(QRCode.restaurant),
-            joinedload(QRCode.table),
-        )
         .filter(QRCode.code == code, QRCode.status == "active")
         .first()
     )
@@ -30,23 +31,24 @@ def scan_qr(code: str, db: Session = Depends(get_db)):
         session_token=session_token,
         expires_at=datetime.utcnow() + timedelta(hours=4),
     )
+
     db.add(session)
     db.commit()
 
+    response.set_cookie(
+        key="guest_session",
+        value=session_token,
+        httponly=True,
+        samesite="lax",
+        secure=False,   # production: True
+        max_age=60 * 60 * 4,
+    )
+
     return {
+        "ok": True,
         "session_token": session_token,
-        "qr": {
-            "id": qr.id,
-            "type": qr.type,
-            "image": qr.image_path,
-        },
-        "restaurant": {
-            "id": qr.restaurant.id,
-            "name": qr.restaurant.name,
-        },
-        "table": {
-            "id": qr.table.id,
-            "name": qr.table.name,
-            "seats": qr.table.seats,
-        },
+        "table_id": qr.table_id,
+        "restaurant_id": qr.restaurant_id,
+        "expires_at": session.expires_at,
     }
+

@@ -3,6 +3,7 @@ from uuid import UUID
 from utils.dependencies import get_current_user_optional
 from utils.points import earn_points_from_order
 from models.point_transaction import PointTransaction
+from utils.rabbitmq import publish_event
 
 from fastapi import (
     APIRouter,
@@ -26,10 +27,56 @@ from utils.permissions import require_roles
 from utils.jwt import verify_token
 from utils.points import earn_points_from_order
 from models.point_transaction import PointTransaction
+from sqlalchemy import func
+
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 ACTIVE_STATUSES = ["pending", "confirmed", "preparing"]
+
+@router.get("/top-ordered")
+def top_10_most_ordered_menu_items(
+    restaurant_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """
+    Lấy top 10 món được ăn nhiều nhất (chỉ tính order đã served)
+    """
+    results = (
+        db.query(
+            MenuItem.id,
+            MenuItem.name,
+            MenuItem.price,
+            MenuItem.image_url,
+            func.sum(OrderLine.qty).label("total_qty")
+        )
+        .join(OrderLine, OrderLine.menu_item_id == MenuItem.id)
+        .join(Order, Order.id == OrderLine.order_id)
+        .filter(
+            Order.status == "served",
+            Order.restaurant_id == restaurant_id
+        )
+        .group_by(
+            MenuItem.id,
+            MenuItem.name,
+            MenuItem.price,
+            MenuItem.image_url
+        )
+        .order_by(func.sum(OrderLine.qty).desc())
+        .limit(10)
+        .all()
+    )
+
+    return [
+        {
+            "id": item.id,
+            "name": item.name,
+            "price": float(item.price),
+            "image_url": item.image_url,
+            "total_ordered": item.total_qty
+        }
+        for item in results
+    ]
 
 # =====================================================
 # CREATE / UPDATE ORDER (GUEST – KHÔNG LOGIN)
@@ -115,6 +162,17 @@ async def create_or_update_order(
 
     db.commit()
     db.refresh(order)
+    # ===== PUBLISH EVENT TO MQ =====
+    publish_event(
+        "ORDER_CREATED" if is_new_order else "ORDER_UPDATED",
+        {
+            "order_id": str(order.id),
+            "restaurant_id": str(order.restaurant_id),
+            "qr_id": str(order.qr_id),
+            "status": order.status,
+            "total": float(order.total_amount),
+        }
+    )
 
     # =================================================
     # REALTIME PUSH
@@ -232,13 +290,23 @@ def ensure_transition(current: str, next_status: str):
             detail=f"Cannot change status {current} → {next_status}"
         )
 
-
 def update_status(db, order, next_status: str):
     ensure_transition(order.status, next_status)
 
     order.status = next_status
     db.commit()
     db.refresh(order)
+
+    # ===== PUBLISH STATUS EVENT TO MQ =====
+    publish_event(
+        "ORDER_STATUS_UPDATED",
+        {
+            "order_id": str(order.id),
+            "restaurant_id": str(order.restaurant_id),
+            "qr_id": str(order.qr_id),
+            "status": order.status,
+        }
+    )
 
     # Push realtime cho khách
     manager.broadcast(
@@ -288,7 +356,6 @@ def served_order(
         db.commit()
 
     return {"ok": True, "status": "served"}
-
 @router.get("/kitchen")
 def list_kitchen_orders(
     db: Session = Depends(get_db),
@@ -306,7 +373,25 @@ def list_kitchen_orders(
         .all()
     )
 
-    return orders
+    return [
+        {
+            "order_id": order.id,
+            "table_id": order.table_id,
+            "status": order.status,
+            "created_at": order.created_at,
+            "lines": [
+                {
+                    "menu_item_id": line.menu_item_id,
+                    "item_name": line.item_name,
+                    "qty": line.qty,
+                    "note": line.note,
+                }
+                for line in order.lines
+            ]
+        }
+        for order in orders
+    ]
+
 @router.get("/me")
 def my_orders(
     db: Session = Depends(get_db),

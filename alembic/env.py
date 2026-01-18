@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv(".env.local")
 import sys
 from pathlib import Path
 import os
@@ -5,7 +7,10 @@ from logging.config import fileConfig
 
 from sqlalchemy import create_engine, pool
 from alembic import context
-from dotenv import load_dotenv
+from db.database import Base
+import models
+target_metadata = Base.metadata
+
 
 # ------------------------------------------------------------------
 # Fix PYTHONPATH so Alembic can import app/*

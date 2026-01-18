@@ -21,5 +21,6 @@ class User(Base):
 
     # customer | staff
     role = Column(String, nullable=False, default="customer")
+    fcm_token = Column(String, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
