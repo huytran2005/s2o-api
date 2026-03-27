@@ -25,6 +25,18 @@ s2o-api/
     .\.venv\Scripts\activate
 ## 📦Install Dependencies
     pip install -r requirements.txt
+
+## ✅ Test And Quality Gate
+Run the local quality flow with:
+
+```bash
+pytest
+pytest --cov=. --cov-report=xml
+ruff check .
+```
+
+For test isolation, use `.env.test.example` as the reference test environment.
+
 ## 📖 Full System Documentation
 
 Complete documentation of the system architecture, modules, and workflows:

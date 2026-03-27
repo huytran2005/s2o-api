@@ -1,9 +1,10 @@
 import requests
 import uuid
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "http://192.168.31.247:8000"
 
 def register_and_login():
+    
     email = f"{uuid.uuid4()}@test.com"
     password = "123456"
 

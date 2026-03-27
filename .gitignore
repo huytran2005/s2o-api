@@ -1,17 +1,28 @@
-# Python
+# virtual env
+.venv/
+.venv-linux/
+venv/
+env/
+
+# python cache
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
+.pytest_cache/
+.mypy_cache/
 
-# Virtual env
-.venv/
-.env.local/
-venv/
+# coverage
+.coverage
+coverage.xml
+htmlcov/
 
-# IDE
-.idea/
+# local/media generated files
+media/menus/*
+media/qrs/*
+!media/.gitkeep
+
+# OS / editor
+.DS_Store
 .vscode/
-
-# Logs
-*.log
+.idea/

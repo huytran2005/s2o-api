@@ -1,0 +1,6 @@
+projectKey=s2o-api
+serverUrl=http://localhost:9000
+serverVersion=26.3.0.120487
+dashboardUrl=http://localhost:9000/dashboard?id=s2o-api
+ceTaskId=5f5b408e-60e8-4328-b6b7-567ea2021aad
+ceTaskUrl=http://localhost:9000/api/ce/task?id=5f5b408e-60e8-4328-b6b7-567ea2021aad

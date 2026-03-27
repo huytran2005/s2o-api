@@ -37,7 +37,7 @@ services:
       - .env.docker
     environment:
       # QUAN TRỌNG: QR phải trỏ gateway
-      BASE_URL: http://localhost:8001/api
+      BASE_URL: http://localhost:8000
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, Integer
+from functools import lru_cache
+from datetime import datetime, timedelta
+
 from db.database import get_db
 from models.order import Order
 from models.point_transaction import PointTransaction
@@ -10,38 +13,36 @@ from utils.permissions import require_roles
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
-@router.get("/overview")
-def overview_report(
-    type: str,  # day | week | month
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    require_roles(current_user, ["owner", "staff"])
+# =========================
+# INTERNAL: build overview
+# =========================
+def build_overview(db: Session, restaurant_id: int):
+    # ===== Time range: today =====
+    now = datetime.utcnow()
+    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = start_of_day + timedelta(days=1)
 
-    if type not in ["day", "week", "month"]:
-        raise HTTPException(400, "Invalid type")
+    # ===== 30-minute bucket (48 points/day) =====
+    bucket_seconds = 30 * 60  # 1800s
 
-    # =========================
-    # TIME BUCKET
-    # =========================
-    date_expr = {
-        "day": func.date_trunc("day", Order.created_at),
-        "week": func.date_trunc("week", Order.created_at),
-        "month": func.date_trunc("month", Order.created_at),
-    }[type]
+    date_expr = func.to_timestamp(
+        (func.extract("epoch", Order.created_at) / bucket_seconds)
+        .cast(Integer)
+        * bucket_seconds
+    )
 
-    # =========================
-    # CHART: revenue + orders
-    # =========================
+    # ===== CHART =====
     chart_rows = (
         db.query(
             date_expr.label("time"),
-            func.sum(Order.total_amount).label("total_revenue"),
+            func.coalesce(func.sum(Order.total_amount), 0).label("total_revenue"),
             func.count(Order.id).label("total_orders"),
         )
         .filter(
-            Order.restaurant_id == current_user.restaurant_id,
+            Order.restaurant_id == restaurant_id,
             Order.status == "served",
+            Order.created_at >= start_of_day,
+            Order.created_at < end_of_day,
         )
         .group_by("time")
         .order_by("time")
@@ -51,40 +52,34 @@ def overview_report(
     chart = [
         {
             "time": r.time.isoformat(),
-            "total_revenue": float(r.total_revenue or 0),
+            "total_revenue": float(r.total_revenue),
             "total_orders": r.total_orders,
         }
         for r in chart_rows
     ]
 
-    # =========================
-    # SUMMARY KPI
-    # =========================
-
-    # Tổng doanh thu + tổng đơn (cùng timeframe)
-    summary_row = (
+    # ===== SUMMARY (today) =====
+    total_revenue, total_orders = (
         db.query(
             func.coalesce(func.sum(Order.total_amount), 0),
             func.count(Order.id),
         )
         .filter(
-            Order.restaurant_id == current_user.restaurant_id,
+            Order.restaurant_id == restaurant_id,
             Order.status == "served",
+            Order.created_at >= start_of_day,
+            Order.created_at < end_of_day,
         )
         .one()
     )
 
-    total_revenue, total_orders = summary_row
-
-    # =========================
-    # Returning customers
-    # Định nghĩa: user có >= 2 order served
-    # =========================
     returning_customers = (
         db.query(Order.user_id)
         .filter(
-            Order.restaurant_id == current_user.restaurant_id,
+            Order.restaurant_id == restaurant_id,
             Order.status == "served",
+            Order.created_at >= start_of_day,
+            Order.created_at < end_of_day,
             Order.user_id.isnot(None),
         )
         .group_by(Order.user_id)
@@ -92,15 +87,14 @@ def overview_report(
         .count()
     )
 
-    # =========================
-    # Total points issued
-    # =========================
     total_points = (
         db.query(func.coalesce(func.sum(PointTransaction.points), 0))
         .join(Order, Order.id == PointTransaction.order_id)
         .filter(
-            Order.restaurant_id == current_user.restaurant_id,
+            Order.restaurant_id == restaurant_id,
             Order.status == "served",
+            Order.created_at >= start_of_day,
+            Order.created_at < end_of_day,
         )
         .scalar()
     )
@@ -108,9 +102,44 @@ def overview_report(
     return {
         "chart": chart,
         "summary": {
-            "total_revenue": float(total_revenue or 0),
+            "total_revenue": float(total_revenue),
             "total_orders": total_orders,
             "returning_customers": returning_customers,
             "total_points_issued": total_points,
-        }
+        },
     }
+
+
+# =========================
+# CACHE: 5 minutes
+# =========================
+@lru_cache(maxsize=128)
+def cached_overview(restaurant_id: int, five_min_key: int):
+    from db.database import SessionLocal
+    db = SessionLocal()
+    try:
+        return build_overview(db, restaurant_id)
+    finally:
+        db.close()
+
+
+# =========================
+# ROUTE
+# =========================
+@router.get("/overview")
+def overview_report(
+    request: Request,
+    current_user=Depends(get_current_user),
+):
+    if request.method == "OPTIONS":
+        return {}
+
+    require_roles(current_user, ["owner", "staff"])
+
+    # cache key: 5 minutes
+    five_min_key = int(datetime.utcnow().timestamp() // 300)
+
+    return cached_overview(
+        current_user.restaurant_id,
+        five_min_key,
+    )

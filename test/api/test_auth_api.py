@@ -1,7 +1,7 @@
 import requests
 import uuid
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "http://192.168.31.247:8000"
 # hoặc http://127.0.0.1:8000
 
 def test_register_api():

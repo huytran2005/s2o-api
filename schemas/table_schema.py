@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from datetime import datetime
 from typing import Optional
@@ -8,7 +8,6 @@ class TableCreate(BaseModel):
     restaurant_id: UUID
     name: str
     seats: int
-
 
 class TableUpdate(BaseModel):
     name: Optional[str] = None
@@ -24,5 +23,4 @@ class TableOut(BaseModel):
     status: str
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

@@ -39,6 +39,6 @@ def qr_entry(
 
     # 3. Fallback mặc định → WEB STATIC
     return RedirectResponse(
-        f"http://192.168.88.51:3000/?code={code}",
+        f"http://192.168.15.166:3000/?code={code}",
         status_code=302,
     )
