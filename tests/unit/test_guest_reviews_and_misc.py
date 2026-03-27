@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 import asyncio
 from fastapi import HTTPException, Response
+from fastapi import WebSocket
 from pydantic import ValidationError
 from starlette.requests import Request
 
@@ -21,9 +22,11 @@ from controllers.points_controller import my_points
 from controllers.review_controller import create_menu_item_review, get_menu_item_review_stats
 from models.guest_session import GuestSession
 from models.order import Order
+from models.order_line import OrderLine
 from schemas.order_schema import OrderCreate, OrderLineResponse, OrderResponse
 from schemas.point_schema import PointResponse
 from schemas.qr_schema import QRCreateResponse, QRScanResponse
+from schemas.review_schema import ReviewCreate
 from utils.analytics import log_analytics
 from utils.rabbitmq import publish_event
 from utils.review_service import (
@@ -167,7 +170,7 @@ def test_points_and_review_controller_paths(monkeypatch):
     monkeypatch.setattr("controllers.review_controller.create_review", lambda **kwargs: review)
 
     result = create_menu_item_review(
-        payload=SimpleNamespace(order_line_id=order_line.id, rating=5, comment="ok"),
+        payload=ReviewCreate(order_line_id=order_line.id, rating=5, comment="ok"),
         db=DBSequence([QueryStub(first_value=order)]),
     )
     assert result is review
@@ -191,17 +194,17 @@ def test_review_service_and_reward_helpers():
     with pytest.raises(HTTPException):
         validate_order_line(DBSequence([QueryStub(first_value=None)]), uuid4())
 
-    validate_order_completed(db=None, order=SimpleNamespace(status="served"))
+    validate_order_completed(db=None, order=Order(status="served"))
     with pytest.raises(HTTPException):
-        validate_order_completed(db=None, order=SimpleNamespace(status="pending"))
+        validate_order_completed(db=None, order=Order(status="pending"))
 
     check_review_exists(DBSequence([QueryStub(first_value=None)]), uuid4())
     with pytest.raises(HTTPException):
         check_review_exists(DBSequence([QueryStub(first_value=object())]), uuid4())
 
     db = DBSequence([])
-    order = SimpleNamespace(id=uuid4(), restaurant_id=uuid4())
-    order_line = SimpleNamespace(id=uuid4(), menu_item_id=uuid4())
+    order = Order(id=uuid4(), restaurant_id=uuid4())
+    order_line = OrderLine(id=uuid4(), menu_item_id=uuid4())
     created = create_review(db=db, order=order, order_line=order_line, rating=4, comment="nice")
     assert created in db.added
     assert db.committed is True
@@ -209,7 +212,6 @@ def test_review_service_and_reward_helpers():
 
     user_id = uuid4()
     order = SimpleNamespace(id=uuid4(), user_id=user_id, total_amount=25000)
-    original_total = len(db.added)
     class DummyColumn:
         def __eq__(self, other):
             return other
@@ -287,9 +289,13 @@ def test_misc_schemas_analytics_rabbitmq_and_ws(monkeypatch, capsys):
     manager = ConnectionManager()
     sent = []
 
-    class WebSocketStub:
+    class WebSocketStub(WebSocket):
+        def __init__(self):
+            self.accepted = False
+
         async def accept(self):
             await asyncio.sleep(0)
+            self.accepted = True
             sent.append("accepted")
 
         async def send_json(self, message):

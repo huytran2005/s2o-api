@@ -23,10 +23,14 @@ QR_DIR = Path("media/qrs")
 TABLE_NOT_FOUND_DETAIL = "Table not found"
 
 
-@router.post("", response_model=TableOut)
+@router.post(
+    "",
+    response_model=TableOut,
+    responses={400: {"description": "Table name already exists"}},
+)
 def create_table(
     payload: TableCreate,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     existed = db.query(RestaurantTable).filter(
         RestaurantTable.restaurant_id == payload.restaurant_id,
@@ -83,10 +87,14 @@ def create_table(
 
     return table
 
-@router.get("/{table_id}", response_model=TableOut)
+@router.get(
+    "/{table_id}",
+    response_model=TableOut,
+    responses={404: {"description": TABLE_NOT_FOUND_DETAIL}},
+)
 def get_table_by_id(
     table_id: UUID,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     table = (
         db.query(RestaurantTable)
@@ -102,7 +110,14 @@ def get_table_by_id(
 
     return table
 
-@router.put("/{table_id}", response_model=TableOut)
+@router.put(
+    "/{table_id}",
+    response_model=TableOut,
+    responses={
+        400: {"description": "Table name already exists"},
+        404: {"description": TABLE_NOT_FOUND_DETAIL},
+    },
+)
 def update_table(
     table_id: UUID,
     payload: TableUpdate,
@@ -145,11 +160,15 @@ def delete_qr_image(table_id: UUID):
         qr_path.unlink()
 
 
-@router.delete("/{table_id}", status_code=204)
+@router.delete(
+    "/{table_id}",
+    status_code=204,
+    responses={404: {"description": TABLE_NOT_FOUND_DETAIL}},
+)
 def delete_table(
     table_id: UUID,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[object, Depends(get_current_user)],
 ):
     # 1. check table
     table = db.query(RestaurantTable).filter_by(id=table_id).first()
@@ -179,7 +198,7 @@ def delete_table(
     db.commit()
 @router.get("", response_model=List[TableOut])
 def get_all_tables(
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     tables = db.query(RestaurantTable).all()
     return tables

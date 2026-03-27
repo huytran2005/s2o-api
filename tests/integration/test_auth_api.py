@@ -9,7 +9,7 @@ from schemas.auth_schema import LoginRequest, RegisterRequest
 
 
 PASSWORD_FIELD = "pass" + "word"
-TEST_SECRET = "123456"
+TEST_AUTH_SECRET = "TestPass_123!"
 
 
 def build_register_request(email: str, secret: str, **extra):
@@ -57,7 +57,7 @@ def test_register_success():
     response = register(
         build_register_request(
             "new-user@example.com",
-            TEST_SECRET,
+            TEST_AUTH_SECRET,
             display_name="New User",
             phone="0123456789",
         ),
@@ -82,7 +82,7 @@ def test_register_duplicate_email_returns_400():
 
     with pytest.raises(HTTPException) as exc_info:
         register(
-            build_register_request("existing@example.com", TEST_SECRET),
+            build_register_request("existing@example.com", TEST_AUTH_SECRET),
             db=fake_db,
         )
 
@@ -97,14 +97,14 @@ def test_login_success_returns_access_token():
         user=SimpleNamespace(
             id=uuid.uuid4(),
             email="owner@example.com",
-            password_hash=hash_password("123456"),
+            password_hash=hash_password(TEST_AUTH_SECRET),
             role="owner",
             restaurant_id=None,
         )
     )
 
     response = login(
-        build_login_request("owner@example.com", TEST_SECRET),
+        build_login_request("owner@example.com", TEST_AUTH_SECRET),
         db=fake_db,
     )
 
@@ -116,7 +116,7 @@ def test_login_invalid_credentials_returns_401():
 
     with pytest.raises(HTTPException) as exc_info:
         login(
-            build_login_request("missing@example.com", TEST_SECRET),
+            build_login_request("missing@example.com", TEST_AUTH_SECRET),
             db=fake_db,
         )
 

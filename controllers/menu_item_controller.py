@@ -37,7 +37,8 @@ router = APIRouter(
 @router.get("/search")
 def search_menu_items_by_name(
     keyword: str = Query(..., min_length=1),
-    db: Session = Depends(get_db),
+    *,
+    db: Annotated[Session, Depends(get_db)],
 ):
     """
     Search menu items by name or description
@@ -56,7 +57,8 @@ def search_menu_items_by_name(
 def filter_menu_items_by_price(
     min_price: Optional[Decimal] = Query(None, ge=0),
     max_price: Optional[Decimal] = Query(None, ge=0),
-    db: Session = Depends(get_db),
+    *,
+    db: Annotated[Session, Depends(get_db)],
 ):
     """
     Filter menu items by price range
@@ -78,8 +80,8 @@ def filter_menu_items_by_price(
 def create_menu(
     restaurant_id: UUID,
     data: MenuCreate,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[object, Depends(get_current_user)],
 ):
     require_roles(current_user, ["staff", "owner"])
 
@@ -106,7 +108,8 @@ async def list_menus_guest(
     restaurant_id: UUID,
     response: Response,
     category_id: UUID | None = None,
-    db: Session = Depends(get_db),
+    *,
+    db: Annotated[Session, Depends(get_db)],
 ):
     cache_key = f"menu:guest:{restaurant_id}:{category_id or 'all'}"
 
@@ -158,10 +161,14 @@ async def list_menus_guest(
 
     return data
 
-@router.get("/{menu_id}", response_model=MenuOut)
+@router.get(
+    "/{menu_id}",
+    response_model=MenuOut,
+    responses={404: {"description": MENU_NOT_FOUND_DETAIL}},
+)
 def get_menu_detail(
     menu_id: UUID,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     menu = (
         db.query(MenuItem)
@@ -194,8 +201,9 @@ def create_menu_with_image(
     price: Annotated[Decimal, Form(...)],
     description: Annotated[str | None, Form()] = None,
     image: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    *,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[object, Depends(get_current_user)],
 ):
     require_roles(current_user, ["staff", "owner"])
 
@@ -227,11 +235,15 @@ def create_menu_with_image(
         category_id=menu.category_id,
         category_name=menu.category.name if menu.category else None,
     )
-@router.delete("/{menu_id}", status_code=204)
+@router.delete(
+    "/{menu_id}",
+    status_code=204,
+    responses={404: {"description": MENU_NOT_FOUND_DETAIL}},
+)
 def delete_menu(
     menu_id: UUID,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[object, Depends(get_current_user)],
 ):
     # ===== CHECK PERMISSION =====
     require_roles(current_user, ["staff", "owner"])
@@ -291,8 +303,9 @@ def delete_menu(
 def update_menu_image(
     menu_id: UUID,
     image: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    *,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[object, Depends(get_current_user)],
 ):
     require_roles(current_user, ["staff", "owner"])
 
