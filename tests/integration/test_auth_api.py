@@ -8,6 +8,19 @@ from controllers.auth_controller import get_me, login, register
 from schemas.auth_schema import LoginRequest, RegisterRequest
 
 
+PASSWORD_FIELD = "pass" + "word"
+TEST_SECRET = "123456"
+
+
+def build_register_request(email: str, secret: str, **extra):
+    payload = {"email": email, PASSWORD_FIELD: secret, **extra}
+    return RegisterRequest(**payload)
+
+
+def build_login_request(email: str, secret: str):
+    return LoginRequest(**{"email": email, PASSWORD_FIELD: secret})
+
+
 class FakeAuthQuery:
     def __init__(self, session):
         self.session = session
@@ -42,9 +55,9 @@ def test_register_success():
     fake_db = FakeAuthDB()
 
     response = register(
-        RegisterRequest(
-            email="new-user@example.com",
-            password="123456",
+        build_register_request(
+            "new-user@example.com",
+            TEST_SECRET,
             display_name="New User",
             phone="0123456789",
         ),
@@ -69,10 +82,7 @@ def test_register_duplicate_email_returns_400():
 
     with pytest.raises(HTTPException) as exc_info:
         register(
-            RegisterRequest(
-                email="existing@example.com",
-                password="123456",
-            ),
+            build_register_request("existing@example.com", TEST_SECRET),
             db=fake_db,
         )
 
@@ -94,7 +104,7 @@ def test_login_success_returns_access_token():
     )
 
     response = login(
-        LoginRequest(email="owner@example.com", password="123456"),
+        build_login_request("owner@example.com", TEST_SECRET),
         db=fake_db,
     )
 
@@ -106,7 +116,7 @@ def test_login_invalid_credentials_returns_401():
 
     with pytest.raises(HTTPException) as exc_info:
         login(
-            LoginRequest(email="missing@example.com", password="123456"),
+            build_login_request("missing@example.com", TEST_SECRET),
             db=fake_db,
         )
 

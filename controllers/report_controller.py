@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy.orm import Session
-from sqlalchemy import func, Integer
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
-from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy import Integer, func
+from sqlalchemy.orm import Session
 
 from db.database import get_db
 from models.order import Order
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 # =========================
 def build_overview(db: Session, restaurant_id: int):
     # ===== Time range: today =====
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = start_of_day + timedelta(days=1)
 
@@ -137,7 +138,7 @@ def overview_report(
     require_roles(current_user, ["owner", "staff"])
 
     # cache key: 5 minutes
-    five_min_key = int(datetime.utcnow().timestamp() // 300)
+    five_min_key = int(datetime.now(timezone.utc).timestamp() // 300)
 
     return cached_overview(
         current_user.restaurant_id,

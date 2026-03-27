@@ -299,26 +299,26 @@ b400f0595c2c
 --
 
 COPY public.app_user (id, restaurant_id, email, password_hash, display_name, phone, role, created_at, fcm_token) FROM stdin;
-d94960a8-e7d9-4135-a34b-39236a20dff0	\N	customer@gmail.com	$2b$04$cZHLzhaR0k.a1KRfjjAz0e5qK5A01iZ/CwpEJ.NXeHtcMohXYwct2	custmer	\N	customer	2026-01-02 11:19:48.187131+07	\N
-a185a53b-da72-422d-9884-ba00367d0445	\N	owner@gmail.com	$2b$04$P82cRlM91fdxVsy7oS2rNODNlnrm3SLH2lSXPYr0XXTYvWWyj4Ra.	owner	\N	owner	2026-01-02 11:17:32.839164+07	\N
-1f1db9d2-9fce-4edf-b588-0440ff112508	f3c7bc32-5565-4b32-ae42-20577d54a2de	staff@gmail.com	$2b$04$Zl4W1Y9Al.Xq2Hzvm/P9sudrxqsF3qXgrJYK3XrPKELDzuGsn7LCa	staff	\N	staff	2026-01-02 11:19:35.802377+07	\N
-6d306b14-6feb-4039-9117-2631de6f593e	\N	protected@test.com	$2b$04$DifXDDdcL8cSOeSM7Qa8oujVl/A2K5uFRAlC55my6IC6CU3huPwy6	\N	\N	customer	2026-01-02 11:33:22.942771+07	\N
-3ac3663f-568b-4068-8e07-249b8798020d	\N	48bade3f-6a7e-442d-a8f4-ec9393dcde23@test.com	$2b$04$puf0H7cFJ3qvypXAr8H4AuAw71NQKfiGJoz1RcZ2qwzawiNYrcc2q	\N	\N	customer	2026-01-02 11:33:22.972343+07	\N
-be38975e-c05c-43af-836a-2b22cc37108e	\N	9f01645b-b114-4bc5-86eb-d34a6eda6563@test.com	$2b$04$gV.3yB4/kw48lKE3lz6R/eVJrWl19Kq5ocRbWRmOCRfrDBxjmkCqq	\N	\N	customer	2026-01-02 11:33:22.981729+07	\N
-163cbe3c-403a-4a29-88e8-9c1a9e6ccd3a	\N	988cbea5-ad35-40d0-b6cf-2bf9076873f3@test.com	$2b$04$b1vC7IW7AlqApIhJw8HJSepdZ06gJ0WR1YVe3KvA6pQqsN6ONWfTO	\N	\N	customer	2026-01-02 11:33:35.154556+07	\N
-be88c143-e97b-4f8a-ab13-77065fd2f76d	\N	0d1df8e0-7db4-4d94-a1fd-018cc49810a1@test.com	$2b$04$wvfRH46rnqZlrDypwVQ8veERf.2Rt7g7ic8BBBFEEW0EhsIXQWgqK	\N	\N	customer	2026-01-02 11:33:35.165253+07	\N
-e8fd98ff-8675-4743-9419-4abb32c14dfb	\N	27a15721-71af-46fe-98b9-47dece1f329e@test.com	$2b$04$3uVF7C8B7n1y3NY3OSA2reHBggCRtSpqALnnKhWnCUaP1CB8W0R9a	\N	\N	customer	2026-01-02 11:33:35.185606+07	\N
-cbffeaca-9a3f-4cd6-800d-7326497fe49f	\N	505eeaa1-e88a-4b4c-9a2b-05789df9f5bc@test.com	$2b$04$OLp4Goub7Hs9BKaqHNuJOuNpoGKLKpC.zrWiMtk.N8S7va1QJqDgq	\N	\N	customer	2026-01-03 17:50:52.644728+07	\N
-c653cd42-4781-4d28-a280-1e392055f8f4	\N	8c4b11c4-6334-4c87-839f-0e831ac653b9@test.com	$2b$04$WatH6IyXaEpnzSVwrKHmQOtc5potnqTeBLx7I0y62.h0xgxbbGcf6	\N	\N	customer	2026-01-03 17:50:52.655949+07	\N
-3dd4cd27-ffb1-4fe3-91b6-798ced68ecfe	\N	1c3f1368-bb41-4546-8c94-71acfa745869@test.com	$2b$04$vgqC0jYoCJ1mXBeE0kGKaedVZBDOmSk1NGcBfB406nLx1sa7tGddu	\N	\N	customer	2026-01-03 17:51:21.446146+07	\N
-391a8c6f-8671-4b47-b313-631222bec8e9	\N	6697e775-f49d-4dc3-af1f-386c57f2bbf1@test.com	$2b$04$Ik9iOn3wS3VgQrUQ6i/m8OjbJqKRfmRORCPagXTNH.m7j8avw86HK	\N	\N	customer	2026-01-03 17:51:21.455697+07	\N
-88ab5b6c-89d6-4faa-9eb1-9d96a713229e	\N	42fc52ea-48ff-4d01-b7f0-29650c139718@test.com	$2b$04$3gEj7JLqKBirRPBn64gqJ.8X/suEnRZPOFPXIgljOe.mx2mfUywuW	\N	\N	customer	2026-01-03 17:51:21.469354+07	\N
-30c9cb1c-d100-41f7-bf13-e98175449026	\N	ba26a3f8-723b-40bb-bf0e-a3d3c1e9030a@test.com	$2b$04$J2P.B3kc8GbN0jRmy/5iZuDUgpSw.Zb3p23OrBBFnIFIrCCWWKRPy	\N	\N	customer	2026-01-03 17:51:38.068257+07	\N
-c79f2b43-bac1-4340-be11-f6853dc7b3fb	\N	9dc710d0-debd-4876-86ee-afa0022131a4@test.com	$2b$04$CaguLPIIO0WIR9LNS/ouu.CkcCj/BRl9AFS2pTERBMwcM0Bq2B/3y	\N	\N	customer	2026-01-03 17:51:38.079358+07	\N
-07e468a6-c6ed-455d-8fd0-ccb9dde72e6e	\N	8ef78bf2-4c22-47e5-ac72-ab03e819db89@test.com	$2b$04$tpIbU.Hy9YcIa.pK7xk/1.gEFvqQW8hBFYGOrISt6jCAjB/T/yX1a	\N	\N	customer	2026-01-03 17:51:38.09386+07	\N
-de282ad6-ad6d-4b17-a79a-ae7c4cf2ef3d	\N	a1b2ac57-8114-400f-aa26-66032abd3ac4@test.com	$2b$04$NYS1LwWJFd92fHcShL59GuX1V23OZupWNub1Rslm4n/tgJTGZ/Biy	\N	\N	customer	2026-01-03 17:51:49.098351+07	\N
-152df546-2449-4615-b9cd-0fe83a1978c6	\N	dda0d8f5-0b9c-4689-bf31-213167d08537@test.com	$2b$04$dBfZ8CcIRQZrUZMKtOBMF.NJ4argaGdO8PYzXAM8Qcr.3d7qalkN.	\N	\N	customer	2026-01-03 17:51:49.107132+07	\N
-8d4c0aa6-9804-49e5-8b20-89f83f113db9	\N	39c105c0-1ff2-4cf8-b4f8-f44a84b12643@test.com	$2b$04$zDuJypZ1x3u.NT25198HeusZR3DPc5Nxmd1PDWFQ9wE6029t3rAXm	\N	\N	customer	2026-01-03 17:51:49.121213+07	\N
+d94960a8-e7d9-4135-a34b-39236a20dff0	\N	customer@gmail.com	REVOKED_HASH	custmer	\N	customer	2026-01-02 11:19:48.187131+07	\N
+a185a53b-da72-422d-9884-ba00367d0445	\N	owner@gmail.com	REVOKED_HASH	owner	\N	owner	2026-01-02 11:17:32.839164+07	\N
+1f1db9d2-9fce-4edf-b588-0440ff112508	f3c7bc32-5565-4b32-ae42-20577d54a2de	staff@gmail.com	REVOKED_HASH	staff	\N	staff	2026-01-02 11:19:35.802377+07	\N
+6d306b14-6feb-4039-9117-2631de6f593e	\N	protected@test.com	REVOKED_HASH	\N	\N	customer	2026-01-02 11:33:22.942771+07	\N
+3ac3663f-568b-4068-8e07-249b8798020d	\N	48bade3f-6a7e-442d-a8f4-ec9393dcde23@test.com	REVOKED_HASH	\N	\N	customer	2026-01-02 11:33:22.972343+07	\N
+be38975e-c05c-43af-836a-2b22cc37108e	\N	9f01645b-b114-4bc5-86eb-d34a6eda6563@test.com	REVOKED_HASH	\N	\N	customer	2026-01-02 11:33:22.981729+07	\N
+163cbe3c-403a-4a29-88e8-9c1a9e6ccd3a	\N	988cbea5-ad35-40d0-b6cf-2bf9076873f3@test.com	REVOKED_HASH	\N	\N	customer	2026-01-02 11:33:35.154556+07	\N
+be88c143-e97b-4f8a-ab13-77065fd2f76d	\N	0d1df8e0-7db4-4d94-a1fd-018cc49810a1@test.com	REVOKED_HASH	\N	\N	customer	2026-01-02 11:33:35.165253+07	\N
+e8fd98ff-8675-4743-9419-4abb32c14dfb	\N	27a15721-71af-46fe-98b9-47dece1f329e@test.com	REVOKED_HASH	\N	\N	customer	2026-01-02 11:33:35.185606+07	\N
+cbffeaca-9a3f-4cd6-800d-7326497fe49f	\N	505eeaa1-e88a-4b4c-9a2b-05789df9f5bc@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:50:52.644728+07	\N
+c653cd42-4781-4d28-a280-1e392055f8f4	\N	8c4b11c4-6334-4c87-839f-0e831ac653b9@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:50:52.655949+07	\N
+3dd4cd27-ffb1-4fe3-91b6-798ced68ecfe	\N	1c3f1368-bb41-4546-8c94-71acfa745869@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:51:21.446146+07	\N
+391a8c6f-8671-4b47-b313-631222bec8e9	\N	6697e775-f49d-4dc3-af1f-386c57f2bbf1@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:51:21.455697+07	\N
+88ab5b6c-89d6-4faa-9eb1-9d96a713229e	\N	42fc52ea-48ff-4d01-b7f0-29650c139718@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:51:21.469354+07	\N
+30c9cb1c-d100-41f7-bf13-e98175449026	\N	ba26a3f8-723b-40bb-bf0e-a3d3c1e9030a@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:51:38.068257+07	\N
+c79f2b43-bac1-4340-be11-f6853dc7b3fb	\N	9dc710d0-debd-4876-86ee-afa0022131a4@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:51:38.079358+07	\N
+07e468a6-c6ed-455d-8fd0-ccb9dde72e6e	\N	8ef78bf2-4c22-47e5-ac72-ab03e819db89@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:51:38.09386+07	\N
+de282ad6-ad6d-4b17-a79a-ae7c4cf2ef3d	\N	a1b2ac57-8114-400f-aa26-66032abd3ac4@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:51:49.098351+07	\N
+152df546-2449-4615-b9cd-0fe83a1978c6	\N	dda0d8f5-0b9c-4689-bf31-213167d08537@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:51:49.107132+07	\N
+8d4c0aa6-9804-49e5-8b20-89f83f113db9	\N	39c105c0-1ff2-4cf8-b4f8-f44a84b12643@test.com	REVOKED_HASH	\N	\N	customer	2026-01-03 17:51:49.121213+07	\N
 \.
 
 
@@ -782,4 +782,3 @@ ALTER TABLE ONLY public.restaurants
 --
 
 \unrestrict 8djHKvCkmfYlauXZb8bNVzLd51iuz37DUeYwpwhhxDSQQPsNl7hDs1y72Fjeaic
-

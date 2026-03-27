@@ -108,9 +108,15 @@ class AsyncRedisStub:
         self.setex_calls = []
 
     async def get(self, key):
+        import asyncio
+
+        await asyncio.sleep(0)
         return self.get_value
 
     async def setex(self, key, ttl, value):
+        import asyncio
+
+        await asyncio.sleep(0)
         self.setex_calls.append((key, ttl, value))
 
     def delete(self, key):
@@ -150,7 +156,6 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
     db = DBSequence([QueryStub(first_value=restaurant)])
     response = Response()
     monkeypatch.setattr("controllers.restaurant_controller.redis_client", redis)
-    payload = pytest.run(async_fn=get_restaurant(restaurant.id, response=response, db=db)) if False else None
     import asyncio
     result = asyncio.run(get_restaurant(restaurant.id, response=response, db=db))
     assert result["name"] == "R2"

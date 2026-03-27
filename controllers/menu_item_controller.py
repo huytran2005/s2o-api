@@ -1,29 +1,34 @@
-from uuid import UUID
 import os
-from typing import Optional
 from decimal import Decimal
+from typing import Annotated, Optional
+from uuid import UUID
+
+import json
 
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
-    UploadFile,
     File,
+    Form,
+    HTTPException,
+    Query,
     Response,
-    Query, Form
+    UploadFile,
 )
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
-from models.category import Category
+
 from db.database import get_db
+from models.category import Category
 from models.menu_item import MenuItem
 from schemas.menu_schema import MenuCreate, MenuOut
+from utils.file_upload import save_menu_image
+from utils.redis import redis_client
 from utils.dependencies import get_current_user
 from utils.permissions import require_roles
-from utils.file_upload import save_menu_image
-from sqlalchemy  import or_,func
-from utils.redis import redis_client
-import json
+
 CACHE_TTL = 5
+MENU_NOT_FOUND_DETAIL = "Menu not found"
 
 router = APIRouter(
     prefix="/menus",
@@ -169,7 +174,7 @@ def get_menu_detail(
     )
 
     if not menu:
-        raise HTTPException(status_code=404, detail="Menu not found")
+        raise HTTPException(status_code=404, detail=MENU_NOT_FOUND_DETAIL)
 
     return MenuOut(
         id=menu.id,
@@ -183,15 +188,12 @@ def get_menu_detail(
     )
 @router.post("/with-image", response_model=MenuOut)
 def create_menu_with_image(
-    restaurant_id: UUID = Query(...),
-
-    name: str = Form(...),
-    category_id: UUID = Form(...),
-    price: Decimal = Form(...),
-    description: str | None = Form(None),
-
+    restaurant_id: Annotated[UUID, Query(...)],
+    name: Annotated[str, Form(...)],
+    category_id: Annotated[UUID, Form(...)],
+    price: Annotated[Decimal, Form(...)],
+    description: Annotated[str | None, Form(None)],
     image: UploadFile = File(...),
-
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -242,7 +244,7 @@ def delete_menu(
     )
 
     if not menu:
-        raise HTTPException(status_code=404, detail="Menu not found")
+        raise HTTPException(status_code=404, detail=MENU_NOT_FOUND_DETAIL)
 
     restaurant_id = menu.restaurant_id
     category_id = menu.category_id
@@ -281,7 +283,11 @@ def delete_menu(
 
     return Response(status_code=204)
 
-@router.put("/{menu_id}/image", response_model=MenuOut)
+@router.put(
+    "/{menu_id}/image",
+    response_model=MenuOut,
+    responses={404: {"description": MENU_NOT_FOUND_DETAIL}},
+)
 def update_menu_image(
     menu_id: UUID,
     image: UploadFile = File(...),
@@ -300,7 +306,7 @@ def update_menu_image(
     )
 
     if not menu:
-        raise HTTPException(status_code=404, detail="Menu not found")
+        raise HTTPException(status_code=404, detail=MENU_NOT_FOUND_DETAIL)
 
     # (optional) xóa ảnh cũ nếu cần
     if menu.image_url:

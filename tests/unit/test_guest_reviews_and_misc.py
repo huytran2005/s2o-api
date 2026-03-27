@@ -5,8 +5,10 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+import asyncio
 from fastapi import HTTPException, Response
 from pydantic import ValidationError
+from starlette.requests import Request
 
 from controllers.guest.guest_qr import qr_entry as guest_qr_entry
 from controllers.guest.me import guest_me
@@ -74,6 +76,16 @@ class DBSequence:
         self.refreshed.append(instance)
 
 
+def make_request(user_agent: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "headers": [(b"user-agent", user_agent.encode())],
+        }
+    )
+
+
 def test_guest_qr_entry_reads_template_and_injects_base_url(monkeypatch, tmp_path):
     template = tmp_path / "guest_qr.html"
     template.write_text("<a>__WEB_BASE_URL__</a>", encoding="utf-8")
@@ -107,13 +119,13 @@ def test_scan_qr_and_qr_entry_handle_valid_and_invalid_codes():
     result = scan_qr("code-1", db=db)
     assert result["qr_code"] == "code-1"
 
-    request = SimpleNamespace(headers={"user-agent": "Android"})
+    request = make_request("Android")
     db = DBSequence([QueryStub(first_value=qr)])
     response = qr_entry("code-1", request=request, db=db)
     assert response.status_code == 302
     assert "intent://qr/open?code=code-1" in response.headers["location"]
 
-    request = SimpleNamespace(headers={"user-agent": "Mozilla"})
+    request = make_request("Mozilla")
     db = DBSequence([QueryStub(first_value=qr)])
     response = qr_entry("code-1", request=request, db=db)
     assert response.headers["location"].endswith("/?code=code-1")
@@ -277,12 +289,12 @@ def test_misc_schemas_analytics_rabbitmq_and_ws(monkeypatch, capsys):
 
     class WebSocketStub:
         async def accept(self):
+            await asyncio.sleep(0)
             sent.append("accepted")
 
         async def send_json(self, message):
+            await asyncio.sleep(0)
             sent.append(message)
-
-    import asyncio
 
     ws = WebSocketStub()
     asyncio.run(manager.connect("room", ws))

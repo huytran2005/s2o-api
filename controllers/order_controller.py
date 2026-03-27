@@ -420,7 +420,10 @@ def ready_order(
     update_status(db, order, "ready")
 
     return {"ok": True, "status": "ready"}
-@router.patch("/{order_id}/served")
+@router.patch(
+    "/{order_id}/served",
+    responses={400: {"description": "Order total invalid"}},
+)
 def served_order(
     order_id: UUID,
     db: Session = Depends(get_db),

@@ -7,6 +7,8 @@ from sqlalchemy.orm import sessionmaker
 from db.database import Base
 from models.user import User
 
+FAKE_SECRET_HASH = "test-hash"
+
 
 @pytest.fixture
 def sqlite_session():
@@ -24,7 +26,7 @@ def test_user_crud_round_trip(sqlite_session):
     user = User(
         id=uuid.uuid4(),
         email="db-user@example.com",
-        password_hash="hashed",
+        password_hash=FAKE_SECRET_HASH,
         display_name="Database User",
         phone="0123456789",
         role="customer",

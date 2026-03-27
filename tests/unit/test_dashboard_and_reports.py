@@ -1,6 +1,8 @@
 from datetime import datetime
 from types import SimpleNamespace
 
+from fastapi import Request
+
 from controllers.customer_dashboard_controller import list_customers
 from controllers.menu_analytics_controller import menu_revenue, menu_trends, top_menu_items
 from controllers.point_dashboard_controller import (
@@ -74,11 +76,22 @@ class DBSequence:
         return self.queries.pop(0)
 
     def close(self):
+        # Test stub only needs to satisfy the SessionLocal cleanup path.
         pass
 
 
 def owner_user():
     return SimpleNamespace(role="owner", restaurant_id=123)
+
+
+def make_request(method: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": method,
+            "headers": [],
+        }
+    )
 
 
 def test_list_customers_supports_search_and_formats_rows():
@@ -366,7 +379,10 @@ def test_cached_overview_uses_sessionlocal_and_closes(monkeypatch):
 
 def test_overview_report_handles_options_and_cached_path(monkeypatch):
     user = owner_user()
-    monkeypatch.setattr("controllers.report_controller.cached_overview", lambda *args: {"ok": True})
+    monkeypatch.setattr(
+        "controllers.report_controller.cached_overview",
+        lambda restaurant_id, five_min_key: {"ok": True},
+    )
 
-    assert overview_report(SimpleNamespace(method="OPTIONS"), current_user=user) == {}
-    assert overview_report(SimpleNamespace(method="GET"), current_user=user) == {"ok": True}
+    assert overview_report(make_request("OPTIONS"), current_user=user) == {}
+    assert overview_report(make_request("GET"), current_user=user) == {"ok": True}

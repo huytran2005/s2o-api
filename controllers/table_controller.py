@@ -1,27 +1,18 @@
-import uuid
 import os
-from typing import List
+from pathlib import Path
+from typing import Annotated, List
+import uuid
+from uuid import UUID
 
 import segno
-from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from uuid import UUID
 
 from db.database import get_db
-from models.restaurant_table import RestaurantTable
-from models.qr_code import QRCode
-from schemas.table_schema import TableCreate, TableOut, TableUpdate
-from utils.dependencies import get_current_user
-from fastapi import HTTPException, Depends
-from sqlalchemy.orm import Session
-from uuid import UUID
-from pathlib import Path
-
-from models.restaurant_table import RestaurantTable
-from models.qr_code import QRCode
 from models.guest_session import GuestSession
-from db.database import get_db
+from models.qr_code import QRCode
+from models.restaurant_table import RestaurantTable
+from schemas.table_schema import TableCreate, TableOut, TableUpdate
 from utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/tables", tags=["Tables"])
@@ -29,6 +20,7 @@ router = APIRouter(prefix="/tables", tags=["Tables"])
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 QR_DIR = Path("media/qrs")
+TABLE_NOT_FOUND_DETAIL = "Table not found"
 
 
 @router.post("", response_model=TableOut)
@@ -105,25 +97,23 @@ def get_table_by_id(
     if not table:
         raise HTTPException(
             status_code=404,
-            detail="Table not found"
+            detail=TABLE_NOT_FOUND_DETAIL
         )
 
     return table
-from uuid import UUID
-from fastapi import HTTPException
 
 @router.put("/{table_id}", response_model=TableOut)
 def update_table(
     table_id: UUID,
     payload: TableUpdate,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     table = db.query(RestaurantTable).filter(
         RestaurantTable.id == table_id
     ).first()
 
     if not table:
-        raise HTTPException(status_code=404, detail="Table not found")
+        raise HTTPException(status_code=404, detail=TABLE_NOT_FOUND_DETAIL)
 
     # ===== CHECK TRÙNG TÊN =====
     if payload.name and payload.name != table.name:
@@ -164,7 +154,7 @@ def delete_table(
     # 1. check table
     table = db.query(RestaurantTable).filter_by(id=table_id).first()
     if not table:
-        raise HTTPException(status_code=404, detail="Table not found")
+        raise HTTPException(status_code=404, detail=TABLE_NOT_FOUND_DETAIL)
 
     # 2. lấy danh sách qr_code id của table này
     qr_ids = (

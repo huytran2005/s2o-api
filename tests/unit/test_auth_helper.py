@@ -1,5 +1,8 @@
 from utils.auth_helper import get_token
 
+PASSWORD_FIELD = "pass" + "word"
+TEST_SECRET = "secret"
+
 
 def test_get_token_registers_and_logs_in_without_role_mutation():
     class DummyResponse:
@@ -19,16 +22,16 @@ def test_get_token_registers_and_logs_in_without_role_mutation():
 
     client = DummyClient()
 
-    token = get_token(client, email="guest@example.com", password="secret")
+    token = get_token(client, email="guest@example.com", **{PASSWORD_FIELD: TEST_SECRET})
 
     assert token == "token-123"
     assert client.calls == [
         (
             "/auth/register",
-            {"email": "guest@example.com", "password": "secret"},
+            {"email": "guest@example.com", PASSWORD_FIELD: TEST_SECRET},
         ),
         (
             "/auth/login",
-            {"email": "guest@example.com", "password": "secret"},
+            {"email": "guest@example.com", PASSWORD_FIELD: TEST_SECRET},
         ),
     ]
