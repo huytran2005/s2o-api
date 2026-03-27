@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./.pytest_cache/s2o-api-test.db")
-os.environ.setdefault("BASE_URL", "http://testserver")
+os.environ.setdefault("BASE_URL", "https://testserver")
 os.environ.setdefault("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 os.environ.setdefault("REDIS_HOST", "localhost")
 os.environ.setdefault("REDIS_PORT", "6379")
