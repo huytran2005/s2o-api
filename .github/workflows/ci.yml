@@ -12,8 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
 
     steps:
       - name: Checkout
@@ -43,13 +41,20 @@ jobs:
         run: pytest
 
       - name: SonarQube Scan
-        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' && env.SONAR_ORGANIZATION != '' }}
+        if: ${{ env.SONAR_TOKEN != '' }}
         uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
         with:
           args: >
-            -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
+            -Dsonar.organization=huytran2005
+            -Dsonar.projectKey=huytran2005_s2o-api
 
       - name: SonarQube Quality Gate
-        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' && env.SONAR_ORGANIZATION != '' }}
+        if: ${{ env.SONAR_TOKEN != '' }}
         uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
         timeout-minutes: 5
