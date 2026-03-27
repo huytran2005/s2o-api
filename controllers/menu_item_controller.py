@@ -192,7 +192,7 @@ def create_menu_with_image(
     name: Annotated[str, Form(...)],
     category_id: Annotated[UUID, Form(...)],
     price: Annotated[Decimal, Form(...)],
-    description: Annotated[str | None, Form(None)],
+    description: Annotated[str | None, Form()] = None,
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
