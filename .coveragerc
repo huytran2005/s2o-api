@@ -1,0 +1,19 @@
+[run]
+branch = True
+source =
+    controllers
+    db
+    main.py
+    schemas
+    utils
+omit =
+    */__init__.py
+    alembic/*
+    media/*
+    test/*
+    tests/*
+
+[report]
+show_missing = True
+skip_covered = False
+precision = 2

@@ -4,6 +4,7 @@ from utils.dependencies import get_current_user_optional
 from utils.points import earn_points_from_order
 from models.point_transaction import PointTransaction
 from utils.rabbitmq import publish_event
+from schemas.order_schema import OrderResponse
 
 from fastapi import (
     APIRouter,
@@ -28,6 +29,7 @@ from utils.jwt import verify_token
 from utils.points import earn_points_from_order
 from models.point_transaction import PointTransaction
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -156,8 +158,10 @@ async def create_or_update_order(
             ))
 
     # 5. Recalculate total (AN TOÀN)
-    order.total_amount = sum(
-        l.qty * l.unit_price for l in order.lines
+    order.total_amount = (
+        db.query(func.coalesce(func.sum(OrderLine.qty * OrderLine.unit_price), 0))
+        .filter(OrderLine.order_id == order.id)
+        .scalar()
     )
 
     db.commit()
@@ -279,8 +283,11 @@ async def kitchen_ws(
 VALID_TRANSITIONS = {
     "pending": "confirmed",
     "confirmed": "preparing",
-    "preparing": "served",
+    "preparing": "ready",     # 👈 bếp làm xong
+    "ready": "served",        # 👈 mang ra cho khách
+    "served": "completed",    # 👈 khách ăn xong
 }
+
 
 def ensure_transition(current: str, next_status: str):
     expected = VALID_TRANSITIONS.get(current)
@@ -331,31 +338,6 @@ def preparing_order(
 
     update_status(db, order, "preparing")
     return {"ok": True, "status": "preparing"}
-@router.patch("/{order_id}/served")
-def served_order(
-    order_id: UUID,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    require_roles(current_user, ["staff", "owner"])
-
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    # chống cộng trùng
-    existed = db.query(PointTransaction).filter(
-        PointTransaction.order_id == order.id,
-        PointTransaction.reason == "ORDER_SERVED"
-    ).first()
-
-    update_status(db, order, "served")
-
-    if order.user_id and not existed:
-        earn_points_from_order(db, order.user_id, order)
-        db.commit()
-
-    return {"ok": True, "status": "served"}
 @router.get("/kitchen")
 def list_kitchen_orders(
     db: Session = Depends(get_db),
@@ -365,18 +347,29 @@ def list_kitchen_orders(
 
     orders = (
         db.query(Order)
+        .options(
+            joinedload(Order.table),
+
+            joinedload(Order.lines).joinedload(OrderLine.menu_item)
+        )
         .filter(
             Order.restaurant_id == current_user.restaurant_id,
-            Order.status.in_(["pending", "confirmed", "preparing"])
+            Order.status.in_([
+                "pending",
+                "confirmed",
+                "preparing",
+                "ready",
+                "served",
+            ])
         )
-        .order_by(Order.created_at.asc())
+        .order_by(Order.created_at.desc())  # đơn mới lên trước
         .all()
     )
 
     return [
         {
             "order_id": order.id,
-            "table_id": order.table_id,
+            "table_name": order.table.name if order.table else None,
             "status": order.status,
             "created_at": order.created_at,
             "lines": [
@@ -385,6 +378,7 @@ def list_kitchen_orders(
                     "item_name": line.item_name,
                     "qty": line.qty,
                     "note": line.note,
+                    "image_url": line.menu_item.image_url if line.menu_item else None,
                 }
                 for line in order.lines
             ]
@@ -392,18 +386,44 @@ def list_kitchen_orders(
         for order in orders
     ]
 
-@router.get("/me")
+from sqlalchemy.orm import joinedload
+
+@router.get("/me", response_model=list[OrderResponse])
 def my_orders(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    return (
+    orders = (
         db.query(Order)
+        .options(
+            joinedload(Order.lines)
+            .joinedload(OrderLine.menu_item)
+        )
         .filter(Order.user_id == current_user.id)
         .order_by(Order.created_at.desc())
         .all()
     )
-@router.patch("/{order_id}/served")
+    return orders
+
+@router.patch("/{order_id}/ready")
+def ready_order(
+    order_id: UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    require_roles(current_user, ["staff", "owner"])
+
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    update_status(db, order, "ready")
+
+    return {"ok": True, "status": "ready"}
+@router.patch(
+    "/{order_id}/served",
+    responses={400: {"description": "Order total invalid"}},
+)
 def served_order(
     order_id: UUID,
     db: Session = Depends(get_db),
@@ -415,7 +435,19 @@ def served_order(
     if not order:
         raise HTTPException(404, "Order not found")
 
-    # chống cộng điểm 2 lần
+    # 🔴 RECALC TRƯỚC KHI SERVED
+    order.total_amount = (
+        db.query(
+            func.coalesce(func.sum(OrderLine.qty * OrderLine.unit_price), 0)
+        )
+        .filter(OrderLine.order_id == order.id)
+        .scalar()
+    )
+
+    if order.total_amount <= 0:
+        raise HTTPException(400, "Order total invalid")
+
+    # chống cộng trùng điểm
     existed = db.query(PointTransaction).filter(
         PointTransaction.order_id == order.id,
         PointTransaction.reason == "ORDER_SERVED"
@@ -423,10 +455,7 @@ def served_order(
 
     update_status(db, order, "served")
 
-    if (
-        order.user_id
-        and not existed
-    ):
+    if order.user_id and not existed:
         earn_points_from_order(db, order.user_id, order)
 
     db.commit()
