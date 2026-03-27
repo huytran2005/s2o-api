@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -9,6 +10,7 @@ import asyncio
 from fastapi import HTTPException, Response
 from fastapi import WebSocket
 from pydantic import ValidationError
+from sqlalchemy.orm import Session
 from starlette.requests import Request
 
 from controllers.guest.guest_qr import qr_entry as guest_qr_entry
@@ -187,6 +189,7 @@ def test_points_and_review_controller_paths(monkeypatch):
 
 
 def test_review_service_and_reward_helpers():
+    db_session = cast(Session, object())
     line = SimpleNamespace(id=uuid4(), menu_item_id=uuid4())
     db = DBSequence([QueryStub(first_value=line)])
     assert validate_order_line(db, line.id) is line
@@ -194,9 +197,9 @@ def test_review_service_and_reward_helpers():
     with pytest.raises(HTTPException):
         validate_order_line(DBSequence([QueryStub(first_value=None)]), uuid4())
 
-    validate_order_completed(db=None, order=Order(status="served"))
+    validate_order_completed(db=db_session, order=Order(status="served"))
     with pytest.raises(HTTPException):
-        validate_order_completed(db=None, order=Order(status="pending"))
+        validate_order_completed(db=db_session, order=Order(status="pending"))
 
     check_review_exists(DBSequence([QueryStub(first_value=None)]), uuid4())
     with pytest.raises(HTTPException):
@@ -293,14 +296,14 @@ def test_misc_schemas_analytics_rabbitmq_and_ws(monkeypatch, capsys):
         def __init__(self):
             self.accepted = False
 
-        async def accept(self):
+        async def accept(self, subprotocol=None, headers=None):
             await asyncio.sleep(0)
             self.accepted = True
             sent.append("accepted")
 
-        async def send_json(self, message):
+        async def send_json(self, data, mode="text"):
             await asyncio.sleep(0)
-            sent.append(message)
+            sent.append(data)
 
     ws = WebSocketStub()
     asyncio.run(manager.connect("room", ws))

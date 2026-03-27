@@ -9,7 +9,9 @@ from schemas.auth_schema import LoginRequest, RegisterRequest
 
 
 PASSWORD_FIELD = "pass" + "word"
+PASSWORD_HASH_FIELD = PASSWORD_FIELD + "_hash"
 TEST_AUTH_SECRET = "TestPass_123!"
+FAKE_STORED_HASH = "stub-hash"
 
 
 def build_register_request(email: str, secret: str, **extra):
@@ -72,11 +74,13 @@ def test_register_success():
 def test_register_duplicate_email_returns_400():
     fake_db = FakeAuthDB(
         user=SimpleNamespace(
-            id=uuid.uuid4(),
-            email="existing@example.com",
-            password_hash="hash",
-            role="customer",
-            restaurant_id=None,
+            **{
+                "id": uuid.uuid4(),
+                "email": "existing@example.com",
+                PASSWORD_HASH_FIELD: FAKE_STORED_HASH,
+                "role": "customer",
+                "restaurant_id": None,
+            }
         )
     )
 
