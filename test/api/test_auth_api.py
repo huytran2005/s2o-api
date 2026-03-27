@@ -1,8 +1,11 @@
+import os
 import requests
 import uuid
 
-BASE_URL = "http://192.168.31.247:8000"
-# hoặc http://127.0.0.1:8000
+TEST_API_SCHEME = os.getenv("TEST_API_SCHEME", "http")
+TEST_API_HOST = os.getenv("TEST_API_HOST", "127.0.0.1")
+TEST_API_PORT = os.getenv("TEST_API_PORT", "8000")
+BASE_URL = f"{TEST_API_SCHEME}://{TEST_API_HOST}:{TEST_API_PORT}"
 
 def test_register_api():
     email = f"{uuid.uuid4()}@test.com"

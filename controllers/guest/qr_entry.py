@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -6,6 +8,7 @@ from db.database import get_db
 from models.qr_code import QRCode
 
 router = APIRouter(prefix="/qr", tags=["QR"])
+WEB_BASE_URL = os.getenv("WEB_BASE_URL", "http://localhost:3000")
 
 
 @router.get("/entry")
@@ -39,6 +42,6 @@ def qr_entry(
 
     # 3. Fallback mặc định → WEB STATIC
     return RedirectResponse(
-        f"http://192.168.15.166:3000/?code={code}",
+        f"{WEB_BASE_URL}/?code={code}",
         status_code=302,
     )
