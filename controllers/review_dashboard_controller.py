@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Query
+from datetime import date, datetime, time, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -53,14 +55,23 @@ def review_summary(
     }
 @router.get("")
 def list_reviews(
-    rating: int | None = Query(default=None),
-    menu_item_id: str | None = Query(default=None),
-    from_date: str | None = Query(default=None),
-    to_date: str | None = Query(default=None),
+    rating: int | None = Query(default=None, ge=1, le=5),
+    menu_item_id: str | None = Query(default=None, min_length=1),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     require_roles(current_user, ["owner", "staff"])
+
+    if rating is not None and not 1 <= rating <= 5:
+        raise HTTPException(status_code=422, detail="rating must be between 1 and 5")
+
+    if menu_item_id == "":
+        raise HTTPException(status_code=422, detail="menu_item_id must not be empty")
+
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date must be before or equal to to_date")
 
     q = (
         db.query(
@@ -75,7 +86,7 @@ def list_reviews(
     )
 
     # Filter theo số sao
-    if rating:
+    if rating is not None:
         q = q.filter(MenuItemReview.rating == rating)
 
     # Filter theo món
@@ -84,10 +95,14 @@ def list_reviews(
 
     # Filter theo thời gian
     if from_date:
-        q = q.filter(MenuItemReview.created_at >= from_date)
+        q = q.filter(
+            MenuItemReview.created_at >= datetime.combine(from_date, time.min)
+        )
 
     if to_date:
-        q = q.filter(MenuItemReview.created_at <= to_date)
+        q = q.filter(
+            MenuItemReview.created_at < datetime.combine(to_date + timedelta(days=1), time.min)
+        )
 
     rows = q.order_by(MenuItemReview.created_at.desc()).limit(100).all()
 

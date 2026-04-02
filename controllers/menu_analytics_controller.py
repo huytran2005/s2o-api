@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -16,11 +16,14 @@ router = APIRouter(
 )
 @router.get("/top-items")
 def top_menu_items(
-    limit: int = 10,
+    limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     require_roles(current_user, ["owner", "staff"])
+
+    if not 1 <= limit <= 100:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 100")
 
     rows = (
         db.query(
@@ -82,11 +85,14 @@ def menu_revenue(
     ]
 @router.get("/trends")
 def menu_trends(
-    menu_item_id: str,
+    menu_item_id: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     require_roles(current_user, ["owner", "staff"])
+
+    if not menu_item_id:
+        raise HTTPException(status_code=422, detail="menu_item_id must not be empty")
 
     rows = (
         db.query(
