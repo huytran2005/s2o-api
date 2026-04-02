@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 
-from fastapi import Request
+import pytest
+from fastapi import HTTPException, Request
 
 from controllers.customer_dashboard_controller import list_customers
 from controllers.menu_analytics_controller import menu_revenue, menu_trends, top_menu_items
@@ -188,7 +189,7 @@ def test_point_dashboard_endpoints_transform_rows():
         "total_points_issued": 500,
         "total_customers_with_points": 7,
     }
-    assert top_customers_by_points(db=top_db, current_user=owner_user()) == [
+    assert top_customers_by_points(limit=10, db=top_db, current_user=owner_user()) == [
         {"user_id": "user-1", "name": "Top User", "total_points": 900}
     ]
     assert point_transactions(db=tx_db, current_user=owner_user()) == [
@@ -248,8 +249,8 @@ def test_review_dashboard_endpoints_transform_rows():
     assert list_reviews(
         rating=5,
         menu_item_id="menu-1",
-        from_date="2026-03-01",
-        to_date="2026-03-31",
+        from_date=date(2026, 3, 1),
+        to_date=date(2026, 3, 31),
         db=list_db,
         current_user=owner_user(),
     ) == [
@@ -301,7 +302,7 @@ def test_menu_analytics_endpoints_transform_rows():
         ]
     )
 
-    assert top_menu_items(db=top_db, current_user=owner_user()) == [
+    assert top_menu_items(limit=10, db=top_db, current_user=owner_user()) == [
         {
             "menu_item_id": "menu-1",
             "name": "Pho",
@@ -386,3 +387,129 @@ def test_overview_report_handles_options_and_cached_path(monkeypatch):
 
     assert overview_report(make_request("OPTIONS"), current_user=user) == {}
     assert overview_report(make_request("GET"), current_user=user) == {"ok": True}
+
+
+def test_dashboard_limit_bva_accepts_min_and_max_values():
+    point_limit_min = QueryStub(all_value=[])
+    point_limit_max = QueryStub(all_value=[])
+    menu_limit_min = QueryStub(all_value=[])
+    menu_limit_max = QueryStub(all_value=[])
+
+    assert top_customers_by_points(
+        limit=1,
+        db=DBSequence([point_limit_min]),
+        current_user=owner_user(),
+    ) == []
+    assert point_limit_min.limit_value == 1
+
+    assert top_customers_by_points(
+        limit=100,
+        db=DBSequence([point_limit_max]),
+        current_user=owner_user(),
+    ) == []
+    assert point_limit_max.limit_value == 100
+
+    assert top_menu_items(
+        limit=1,
+        db=DBSequence([menu_limit_min]),
+        current_user=owner_user(),
+    ) == []
+    assert menu_limit_min.limit_value == 1
+
+    assert top_menu_items(
+        limit=100,
+        db=DBSequence([menu_limit_max]),
+        current_user=owner_user(),
+    ) == []
+    assert menu_limit_max.limit_value == 100
+
+
+def test_dashboard_limit_bva_rejects_values_outside_range():
+    for limit in (0, 101):
+        with pytest.raises(HTTPException) as point_exc:
+            top_customers_by_points(
+                limit=limit,
+                db=DBSequence([]),
+                current_user=owner_user(),
+            )
+
+        assert point_exc.value.status_code == 422
+        assert point_exc.value.detail == "limit must be between 1 and 100"
+
+        with pytest.raises(HTTPException) as menu_exc:
+            top_menu_items(
+                limit=limit,
+                db=DBSequence([]),
+                current_user=owner_user(),
+            )
+
+        assert menu_exc.value.status_code == 422
+        assert menu_exc.value.detail == "limit must be between 1 and 100"
+
+
+def test_review_dashboard_rating_bva_accepts_1_and_5_only_within_range():
+    for rating in (1, 5):
+        assert list_reviews(
+            rating=rating,
+            menu_item_id=None,
+            from_date=None,
+            to_date=None,
+            db=DBSequence([QueryStub(all_value=[])]),
+            current_user=owner_user(),
+        ) == []
+
+    for rating in (0, 6):
+        with pytest.raises(HTTPException) as exc_info:
+            list_reviews(
+                rating=rating,
+                menu_item_id=None,
+                from_date=None,
+                to_date=None,
+                db=DBSequence([]),
+                current_user=owner_user(),
+            )
+
+        assert exc_info.value.status_code == 422
+        assert exc_info.value.detail == "rating must be between 1 and 5"
+
+
+def test_review_dashboard_date_range_bva_allows_same_day_and_rejects_inversion():
+    assert list_reviews(
+        rating=None,
+        menu_item_id=None,
+        from_date=date(2026, 3, 31),
+        to_date=date(2026, 3, 31),
+        db=DBSequence([QueryStub(all_value=[])]),
+        current_user=owner_user(),
+    ) == []
+
+    with pytest.raises(HTTPException) as exc_info:
+        list_reviews(
+            rating=None,
+            menu_item_id=None,
+            from_date=date(2026, 4, 1),
+            to_date=date(2026, 3, 31),
+            db=DBSequence([]),
+            current_user=owner_user(),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "from_date must be before or equal to to_date"
+
+
+def test_menu_trends_menu_item_id_bva_rejects_empty_and_accepts_single_character():
+    assert menu_trends(
+        menu_item_id="m",
+        db=DBSequence([QueryStub(all_value=[])]),
+        current_user=owner_user(),
+    ) == []
+
+    with pytest.raises(HTTPException) as exc_info:
+        menu_trends(
+            menu_item_id="",
+            db=DBSequence([]),
+            current_user=owner_user(),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "menu_item_id must not be empty"

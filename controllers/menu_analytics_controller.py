@@ -1,26 +1,37 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from db.database import get_db
+from models.menu_item import MenuItem
+from models.order import Order
+from models.order_line import OrderLine
+from models.user import User
 from utils.dependencies import get_current_user
 from utils.permissions import require_roles
 
-from models.order import Order
-from models.order_line import OrderLine
-from models.menu_item import MenuItem
+DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
+VALIDATION_ERROR_RESPONSE = {422: {"description": "Validation Error"}}
 
 router = APIRouter(
     prefix="/dashboard/menu",
-    tags=["Dashboard - Menu Analytics"]
+    tags=["Dashboard - Menu Analytics"],
 )
-@router.get("/top-items")
+
+
+@router.get("/top-items", responses=VALIDATION_ERROR_RESPONSE)
 def top_menu_items(
-    limit: int = 10,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
 ):
     require_roles(current_user, ["owner", "staff"])
+
+    if not 1 <= limit <= 100:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 100")
 
     rows = (
         db.query(
@@ -43,17 +54,19 @@ def top_menu_items(
 
     return [
         {
-            "menu_item_id": r.menu_item_id,
-            "name": r.menu_name,
-            "sold_qty": int(r.total_qty or 0),
-            "revenue": float(r.revenue or 0),
+            "menu_item_id": row.menu_item_id,
+            "name": row.menu_name,
+            "sold_qty": int(row.total_qty or 0),
+            "revenue": float(row.revenue or 0),
         }
-        for r in rows
+        for row in rows
     ]
+
+
 @router.get("/revenue")
 def menu_revenue(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     require_roles(current_user, ["owner", "staff"])
 
@@ -75,18 +88,23 @@ def menu_revenue(
 
     return [
         {
-            "name": r.menu_name,
-            "revenue": float(r.revenue or 0),
+            "name": row.menu_name,
+            "revenue": float(row.revenue or 0),
         }
-        for r in rows
+        for row in rows
     ]
-@router.get("/trends")
+
+
+@router.get("/trends", responses=VALIDATION_ERROR_RESPONSE)
 def menu_trends(
-    menu_item_id: str,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    menu_item_id: Annotated[str, Query(min_length=1)],
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     require_roles(current_user, ["owner", "staff"])
+
+    if not menu_item_id:
+        raise HTTPException(status_code=422, detail="menu_item_id must not be empty")
 
     rows = (
         db.query(
@@ -106,8 +124,8 @@ def menu_trends(
 
     return [
         {
-            "date": r.day.date().isoformat(),
-            "sold_qty": int(r.sold_qty or 0),
+            "date": row.day.date().isoformat(),
+            "sold_qty": int(row.sold_qty or 0),
         }
-        for r in rows
+        for row in rows
     ]

@@ -1,23 +1,31 @@
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from datetime import date, datetime, time, timedelta
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from db.database import get_db
+from models.menu_item import MenuItem
+from models.review import MenuItemReview
+from models.user import User
 from utils.dependencies import get_current_user
 from utils.permissions import require_roles
 
-from models.review import MenuItemReview
-from models.menu_item import MenuItem
-from models.order import Order
+DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
+VALIDATION_ERROR_RESPONSE = {422: {"description": "Validation Error"}}
 
 router = APIRouter(
     prefix="/dashboard/reviews",
-    tags=["Dashboard - Reviews"]
+    tags=["Dashboard - Reviews"],
 )
+
+
 @router.get("/summary")
 def review_summary(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     require_roles(current_user, ["owner", "staff"])
 
@@ -51,18 +59,29 @@ def review_summary(
         "avg_rating": round(float(avg_rating), 2),
         "bad_reviews": bad_reviews,
     }
-@router.get("")
+
+
+@router.get("", responses=VALIDATION_ERROR_RESPONSE)
 def list_reviews(
-    rating: int | None = Query(default=None),
-    menu_item_id: str | None = Query(default=None),
-    from_date: str | None = Query(default=None),
-    to_date: str | None = Query(default=None),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
+    rating: Annotated[int | None, Query(ge=1, le=5)] = None,
+    menu_item_id: Annotated[str | None, Query(min_length=1)] = None,
+    from_date: Annotated[date | None, Query()] = None,
+    to_date: Annotated[date | None, Query()] = None,
 ):
     require_roles(current_user, ["owner", "staff"])
 
-    q = (
+    if rating is not None and not 1 <= rating <= 5:
+        raise HTTPException(status_code=422, detail="rating must be between 1 and 5")
+
+    if menu_item_id == "":
+        raise HTTPException(status_code=422, detail="menu_item_id must not be empty")
+
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(status_code=422, detail="from_date must be before or equal to to_date")
+
+    query = (
         db.query(
             MenuItemReview.id,
             MenuItemReview.rating,
@@ -74,37 +93,40 @@ def list_reviews(
         .filter(MenuItem.restaurant_id == current_user.restaurant_id)
     )
 
-    # Filter theo số sao
-    if rating:
-        q = q.filter(MenuItemReview.rating == rating)
+    if rating is not None:
+        query = query.filter(MenuItemReview.rating == rating)
 
-    # Filter theo món
     if menu_item_id:
-        q = q.filter(MenuItemReview.menu_item_id == menu_item_id)
+        query = query.filter(MenuItemReview.menu_item_id == menu_item_id)
 
-    # Filter theo thời gian
     if from_date:
-        q = q.filter(MenuItemReview.created_at >= from_date)
+        query = query.filter(
+            MenuItemReview.created_at >= datetime.combine(from_date, time.min)
+        )
 
     if to_date:
-        q = q.filter(MenuItemReview.created_at <= to_date)
+        query = query.filter(
+            MenuItemReview.created_at < datetime.combine(to_date + timedelta(days=1), time.min)
+        )
 
-    rows = q.order_by(MenuItemReview.created_at.desc()).limit(100).all()
+    rows = query.order_by(MenuItemReview.created_at.desc()).limit(100).all()
 
     return [
         {
-            "review_id": r.id,
-            "menu_item": r.menu_name,
-            "rating": r.rating,
-            "comment": r.comment,
-            "created_at": r.created_at.isoformat(),
+            "review_id": row.id,
+            "menu_item": row.menu_name,
+            "rating": row.rating,
+            "comment": row.comment,
+            "created_at": row.created_at.isoformat(),
         }
-        for r in rows
+        for row in rows
     ]
+
+
 @router.get("/by-menu")
 def reviews_by_menu(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     require_roles(current_user, ["owner", "staff"])
 
@@ -124,10 +146,10 @@ def reviews_by_menu(
 
     return [
         {
-            "menu_item_id": r.menu_item_id,
-            "menu_item": r.name,
-            "total_reviews": r.total_reviews,
-            "avg_rating": round(float(r.avg_rating), 2),
+            "menu_item_id": row.menu_item_id,
+            "menu_item": row.name,
+            "total_reviews": row.total_reviews,
+            "avg_rating": round(float(row.avg_rating), 2),
         }
-        for r in rows
+        for row in rows
     ]
