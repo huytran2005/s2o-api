@@ -1,24 +1,31 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from db.database import get_db
+from models.order import Order
+from models.point_transaction import PointTransaction
+from models.user import User
+from models.user_point import UserPoint
 from utils.dependencies import get_current_user
 from utils.permissions import require_roles
 
-from models.user_point import UserPoint
-from models.point_transaction import PointTransaction
-from models.order import Order
-from models.user import User
+DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
+VALIDATION_ERROR_RESPONSE = {422: {"description": "Validation Error"}}
 
 router = APIRouter(
     prefix="/dashboard/points",
-    tags=["Dashboard - Loyalty Points"]
+    tags=["Dashboard - Loyalty Points"],
 )
+
+
 @router.get("/summary")
 def point_summary(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     require_roles(current_user, ["owner", "staff"])
 
@@ -47,11 +54,13 @@ def point_summary(
         "total_points_issued": total_points,
         "total_customers_with_points": total_customers,
     }
-@router.get("/top-customers")
+
+
+@router.get("/top-customers", responses=VALIDATION_ERROR_RESPONSE)
 def top_customers_by_points(
-    limit: int = Query(default=10, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
 ):
     require_roles(current_user, ["owner", "staff"])
 
@@ -78,16 +87,18 @@ def top_customers_by_points(
 
     return [
         {
-            "user_id": r.id,
-            "name": r.display_name or r.email,
-            "total_points": r.total_points,
+            "user_id": row.id,
+            "name": row.display_name or row.email,
+            "total_points": row.total_points,
         }
-        for r in rows
+        for row in rows
     ]
+
+
 @router.get("/transactions")
 def point_transactions(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     require_roles(current_user, ["owner", "staff"])
 
@@ -113,11 +124,11 @@ def point_transactions(
 
     return [
         {
-            "transaction_id": r.id,
-            "order_id": r.order_id,
-            "customer": r.display_name or r.email,
-            "points": r.points,
-            "created_at": r.created_at.isoformat(),
+            "transaction_id": row.id,
+            "order_id": row.order_id,
+            "customer": row.display_name or row.email,
+            "points": row.points,
+            "created_at": row.created_at.isoformat(),
         }
-        for r in rows
+        for row in rows
     ]
