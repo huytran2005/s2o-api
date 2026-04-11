@@ -86,6 +86,16 @@ def test_get_current_user_rejects_missing_payload_or_user(monkeypatch):
     assert exc_info.value.status_code == 401
 
 
+def test_get_current_user_rejects_payload_without_user_id(monkeypatch):
+    monkeypatch.setattr(dependencies, "decode_token", lambda token: {"role": "owner"})
+
+    with pytest.raises(HTTPException) as exc_info:
+        dependencies.get_current_user(token="missing-user-id", db=object())
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Invalid token payload"
+
+
 def test_get_guest_session_and_mobile_validate_tokens(monkeypatch):
     session = SimpleNamespace(session_token="guest-token", expires_at=datetime.utcnow() + timedelta(hours=1))
 
@@ -128,3 +138,30 @@ def test_get_guest_session_and_mobile_validate_tokens(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         dependencies.get_guest_session_mobile(authorization="Bearer bad", db=DummyDB(None))
     assert exc_info.value.status_code == 401
+
+
+def test_get_guest_session_mobile_rejects_bad_scheme(monkeypatch):
+    session = SimpleNamespace(session_token="guest-token", expires_at=datetime.utcnow() + timedelta(hours=1))
+
+    class DummyQuery:
+        def __init__(self, result):
+            self.result = result
+
+        def filter(self, *args, **kwargs):
+            return self
+
+        def first(self):
+            return self.result
+
+    class DummyDB:
+        def __init__(self, result):
+            self.result = result
+
+        def query(self, model):
+            return DummyQuery(self.result)
+
+    with pytest.raises(HTTPException) as exc_info:
+        dependencies.get_guest_session_mobile(authorization="Token guest-token", db=DummyDB(session))
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Invalid token"

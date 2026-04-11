@@ -128,6 +128,29 @@ def test_login_invalid_credentials_returns_401():
     assert exc_info.value.detail == "Invalid credentials"
 
 
+def test_login_rejects_staff_without_restaurant():
+    from utils.security import hash_password
+
+    fake_db = FakeAuthDB(
+        user=SimpleNamespace(
+            id=uuid.uuid4(),
+            email="staff@example.com",
+            password_hash=hash_password(TEST_AUTH_SECRET),
+            role="staff",
+            restaurant_id=None,
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        login(
+            build_login_request("staff@example.com", TEST_AUTH_SECRET),
+            db=fake_db,
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Staff account is not bound to any restaurant"
+
+
 def test_get_me_returns_current_user_payload():
     current_user = SimpleNamespace(
         id=uuid.uuid4(),
@@ -140,3 +163,17 @@ def test_get_me_returns_current_user_payload():
 
     assert response["email"] == "owner@example.com"
     assert response["role"] == "owner"
+
+
+def test_get_me_includes_restaurant_id():
+    restaurant_id = uuid.uuid4()
+    current_user = SimpleNamespace(
+        id=uuid.uuid4(),
+        email="staff@example.com",
+        role="staff",
+        restaurant_id=restaurant_id,
+    )
+
+    response = get_me(current_user=current_user)
+
+    assert response["restaurant_id"] == str(restaurant_id)

@@ -138,6 +138,9 @@ def test_scan_qr_and_qr_entry_handle_valid_and_invalid_codes():
     with pytest.raises(HTTPException):
         scan_qr("missing", db=DBSequence([QueryStub(first_value=None)]))
 
+    with pytest.raises(HTTPException):
+        qr_entry("missing", request=request, db=DBSequence([QueryStub(first_value=None)]))
+
 
 def test_guest_session_endpoints_create_sessions(monkeypatch):
     qr = SimpleNamespace(id=uuid4(), table_id=uuid4(), restaurant_id=uuid4())
@@ -156,6 +159,9 @@ def test_guest_session_endpoints_create_sessions(monkeypatch):
     monkeypatch.setattr("controllers.guest.session_mobile.secrets.token_urlsafe", lambda _: "token-mobile")
     mobile_result = create_guest_session_mobile("code-1", db=db)
     assert mobile_result["session_token"] == "token-mobile"
+
+    with pytest.raises(HTTPException):
+        create_guest_session_mobile("missing", db=DBSequence([QueryStub(first_value=None)]))
 
 
 def test_points_and_review_controller_paths(monkeypatch):
@@ -186,6 +192,15 @@ def test_points_and_review_controller_paths(monkeypatch):
         "avg_rating": 0,
         "total_reviews": 0,
     }
+
+    monkeypatch.setattr("controllers.review_controller.validate_order_line", lambda db, oid: order_line)
+    monkeypatch.setattr("controllers.review_controller.validate_order_completed", lambda db, order: None)
+    monkeypatch.setattr("controllers.review_controller.check_review_exists", lambda db, oid: None)
+    with pytest.raises(HTTPException):
+        create_menu_item_review(
+            payload=ReviewCreate(order_line_id=order_line.id, rating=5, comment="ok"),
+            db=DBSequence([QueryStub(first_value=None)]),
+        )
 
 
 def test_review_service_and_reward_helpers():
@@ -244,6 +259,23 @@ def test_review_service_and_reward_helpers():
     db = DBSequence([QueryStub(first_value=object())])
     assert reward_on_order_served(db, order) is False
     monkeypatch.undo()
+
+
+def test_order_line_image_url_property():
+    menu_item = SimpleNamespace(image_url="/media/menus/tea.png")
+    order_line = OrderLine(
+        id=uuid4(),
+        order_id=uuid4(),
+        menu_item_id=uuid4(),
+        item_name="Tea",
+        qty=1,
+        unit_price=10,
+        menu_item=menu_item,
+    )
+    assert order_line.image_url == "/media/menus/tea.png"
+
+    order_line.menu_item = None
+    assert order_line.image_url is None
 
 
 def test_misc_schemas_analytics_rabbitmq_and_ws(monkeypatch, capsys):

@@ -147,6 +147,66 @@ def test_list_customers_handles_filters_and_email_fallback():
     assert result[0]["last_visit"] is None
 
 
+def test_list_customers_supports_high_points_filter():
+    rows = [
+        SimpleNamespace(
+            user_id="u-3",
+            display_name="High Points",
+            email="points@example.com",
+            phone="0123",
+            total_orders=5,
+            total_spent=500,
+            total_points=1500,
+            last_visit=datetime(2026, 3, 28, 10, 0, 0),
+        )
+    ]
+    db = DBSequence([QueryStub(all_value=rows)])
+
+    result = list_customers(filter="high_points", db=db, current_user=owner_user())
+
+    assert result[0]["total_points"] == 1500
+
+
+def test_list_customers_supports_new_filter():
+    rows = [
+        SimpleNamespace(
+            user_id="u-4",
+            display_name="New Customer",
+            email="new@example.com",
+            phone="0900",
+            total_orders=1,
+            total_spent=50,
+            total_points=20,
+            last_visit=datetime(2026, 3, 28, 11, 0, 0),
+        )
+    ]
+    db = DBSequence([QueryStub(all_value=rows)])
+
+    result = list_customers(filter="new", db=db, current_user=owner_user())
+
+    assert result[0]["user_id"] == "u-4"
+
+
+def test_list_customers_without_search_or_filter():
+    rows = [
+        SimpleNamespace(
+            user_id="u-5",
+            display_name="Plain Customer",
+            email="plain@example.com",
+            phone="0888",
+            total_orders=4,
+            total_spent=220,
+            total_points=300,
+            last_visit=datetime(2026, 3, 28, 12, 0, 0),
+        )
+    ]
+    db = DBSequence([QueryStub(all_value=rows)])
+
+    result = list_customers(db=db, current_user=owner_user())
+
+    assert result[0]["email"] == "plain@example.com"
+
+
 def test_point_dashboard_endpoints_transform_rows():
     summary_db = DBSequence(
         [
@@ -270,6 +330,16 @@ def test_review_dashboard_endpoints_transform_rows():
             "avg_rating": 4.75,
         }
     ]
+
+
+def test_review_dashboard_rejects_empty_menu_item_id():
+    db = DBSequence([QueryStub(all_value=[])])
+
+    with pytest.raises(HTTPException) as exc_info:
+        list_reviews(menu_item_id="", db=db, current_user=owner_user())
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "menu_item_id must not be empty"
 
 
 def test_menu_analytics_endpoints_transform_rows():

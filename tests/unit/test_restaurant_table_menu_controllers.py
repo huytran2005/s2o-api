@@ -211,6 +211,16 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
     result = update_preview_image(restaurant.id, image=upload, db=db, current_user=user)
     assert result["image_preview"] == "/media/restaurants/new.png"
 
+    old_file.write_bytes(b"old")
+    restaurant.image_preview = str(old_file)
+    monkeypatch.setattr(
+        "controllers.restaurant_controller.os.remove",
+        lambda path: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    db = DBSequence([QueryStub(first_value=restaurant)])
+    result = update_preview_image(restaurant.id, image=upload, db=db, current_user=user)
+    assert result["image_preview"] == "/media/restaurants/new.png"
+
     to_delete = SimpleNamespace(id=uuid4(), image_preview=str(tmp_path / "delete.png"))
     Path(to_delete.image_preview).write_bytes(b"x")
     admin = SimpleNamespace(id=uuid4(), role="admin")
@@ -225,6 +235,12 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
     monkeypatch.setattr("controllers.restaurant_controller.os.remove", lambda path: (_ for _ in ()).throw(RuntimeError("boom")))
     result = delete_restaurant(delete_with_image.id, db=db, current_user=admin)
     assert result == {"message": "Restaurant deleted"}
+
+    with pytest.raises(HTTPException):
+        update_preview_image(uuid4(), image=upload, db=DBSequence([QueryStub(first_value=None)]), current_user=user)
+
+    with pytest.raises(HTTPException):
+        delete_restaurant(uuid4(), db=DBSequence([QueryStub(first_value=None)]), current_user=admin)
 
     with pytest.raises(HTTPException):
         create_restaurant(
