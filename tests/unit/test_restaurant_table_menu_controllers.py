@@ -123,6 +123,28 @@ class AsyncRedisStub:
         self.setex_calls.append(("delete", key))
 
 
+class BrokenRedisGetStub:
+    async def get(self, key):
+        raise RuntimeError("redis down")
+
+    async def setex(self, key, ttl, value):
+        raise RuntimeError("unused")
+
+    def delete(self, key):
+        raise RuntimeError("unused")
+
+
+class BrokenRedisDeleteStub:
+    async def get(self, key):
+        return None
+
+    async def setex(self, key, ttl, value):
+        return None
+
+    def delete(self, key):
+        raise RuntimeError("redis delete failed")
+
+
 def owner_user():
     return SimpleNamespace(id=uuid4(), role="owner")
 
@@ -161,6 +183,9 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
     assert result["name"] == "R2"
     assert response.headers["X-Cache"] == "MISS"
 
+    with pytest.raises(HTTPException):
+        asyncio.run(get_restaurant(uuid4(), response=Response(), db=DBSequence([QueryStub(first_value=None)])))
+
     db = DBSequence([QueryStub(first_value=existing)])
     updated = update_restaurant(
         existing.id,
@@ -179,6 +204,13 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
     result = update_preview_image(restaurant.id, image=upload, db=db, current_user=user)
     assert result == {"image_preview": "/media/restaurants/new.png"}
 
+    old_file.write_bytes(b"old")
+    restaurant.image_preview = str(old_file)
+    monkeypatch.setattr("controllers.restaurant_controller.os.remove", lambda path: None)
+    db = DBSequence([QueryStub(first_value=restaurant)])
+    result = update_preview_image(restaurant.id, image=upload, db=db, current_user=user)
+    assert result["image_preview"] == "/media/restaurants/new.png"
+
     to_delete = SimpleNamespace(id=uuid4(), image_preview=str(tmp_path / "delete.png"))
     Path(to_delete.image_preview).write_bytes(b"x")
     admin = SimpleNamespace(id=uuid4(), role="admin")
@@ -186,6 +218,20 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
     result = delete_restaurant(to_delete.id, db=db, current_user=admin)
     assert result == {"message": "Restaurant deleted"}
     assert db.deleted == [to_delete]
+
+    delete_with_image = SimpleNamespace(id=uuid4(), image_preview=str(tmp_path / "delete-2.png"))
+    Path(delete_with_image.image_preview).write_bytes(b"x")
+    db = DBSequence([QueryStub(first_value=delete_with_image)])
+    monkeypatch.setattr("controllers.restaurant_controller.os.remove", lambda path: (_ for _ in ()).throw(RuntimeError("boom")))
+    result = delete_restaurant(delete_with_image.id, db=db, current_user=admin)
+    assert result == {"message": "Restaurant deleted"}
+
+    with pytest.raises(HTTPException):
+        create_restaurant(
+            RestaurantCreate(name="Nope", description="Denied"),
+            db=DBSequence([]),
+            current_user=SimpleNamespace(id=uuid4(), role="customer"),
+        )
 
 
 def test_restaurant_get_uses_cache_when_available(monkeypatch):
@@ -223,6 +269,9 @@ def test_menu_controller_paths(monkeypatch, tmp_path):
         max_price=Decimal("20"),
         db=DBSequence([QueryStub(all_value=[menu])]),
     ) == [menu]
+    assert filter_menu_items_by_price(min_price=Decimal("1"), db=DBSequence([QueryStub(all_value=[menu])])) == [menu]
+    assert filter_menu_items_by_price(max_price=Decimal("20"), db=DBSequence([QueryStub(all_value=[menu])])) == [menu]
+    assert filter_menu_items_by_price(db=DBSequence([QueryStub(all_value=[menu])])) == [menu]
 
     db = DBSequence([])
     created = create_menu(
@@ -232,6 +281,14 @@ def test_menu_controller_paths(monkeypatch, tmp_path):
         current_user=user,
     )
     assert created.name == "Tea"
+
+    with pytest.raises(HTTPException):
+        create_menu(
+            restaurant_id=restaurant_id,
+            data=MenuCreate(name="Denied", price=Decimal("2.5"), category_id=category_id),
+            db=DBSequence([]),
+            current_user=SimpleNamespace(id=uuid4(), role="customer"),
+        )
 
     redis = AsyncRedisStub()
     monkeypatch.setattr("controllers.menu_item_controller.redis_client", redis)
@@ -250,8 +307,22 @@ def test_menu_controller_paths(monkeypatch, tmp_path):
     assert result[0]["name"] == "Cached"
     assert response.headers["X-Cache"] == "HIT"
 
+    monkeypatch.setattr("controllers.menu_item_controller.redis_client", BrokenRedisGetStub())
+    response = Response()
+    result = asyncio.run(list_menus_guest(restaurant_id, response=response, db=DBSequence([QueryStub(all_value=[menu])])))
+    assert result[0]["name"] == "Pho"
+    assert response.headers.get("X-Cache") is None
+
+    monkeypatch.setattr("controllers.menu_item_controller.redis_client", BrokenRedisDeleteStub())
+    response = Response()
+    result = asyncio.run(list_menus_guest(restaurant_id, response=response, db=DBSequence([QueryStub(all_value=[menu])]), category_id=category_id))
+    assert result[0]["category_id"] == category_id
+
     detail = get_menu_detail(menu.id, db=DBSequence([QueryStub(first_value=menu)]))
     assert detail.name == "Pho"
+
+    with pytest.raises(HTTPException):
+        get_menu_detail(uuid4(), db=DBSequence([QueryStub(first_value=None)]))
 
     monkeypatch.setattr("controllers.menu_item_controller.save_menu_image", lambda image: "/media/menus/new.png")
     upload = UploadFile(filename="menu.png", file=BytesIO(b"img"))
@@ -277,18 +348,63 @@ def test_menu_controller_paths(monkeypatch, tmp_path):
     updated = update_menu_image(menu.id, image=upload, db=DBSequence([QueryStub(first_value=menu)]), current_user=user)
     assert updated.image_url == "/media/menus/updated.png"
 
+    old_path = tmp_path / "old-menu.png"
+    old_path.write_bytes(b"old")
+    menu.image_url = "/media/" + old_path.name
+    monkeypatch.setattr("controllers.menu_item_controller.os.remove", lambda path: None)
+    updated = update_menu_image(menu.id, image=upload, db=DBSequence([QueryStub(first_value=menu)]), current_user=user)
+    assert updated.image_url == "/media/menus/updated.png"
+
+    monkeypatch.setattr("controllers.menu_item_controller.os.remove", lambda path: (_ for _ in ()).throw(RuntimeError("boom")))
+    updated = update_menu_image(menu.id, image=upload, db=DBSequence([QueryStub(first_value=menu)]), current_user=user)
+    assert updated.image_url == "/media/menus/updated.png"
+
+    with pytest.raises(HTTPException):
+        update_menu_image(uuid4(), image=upload, db=DBSequence([QueryStub(first_value=None)]), current_user=user)
+
     delete_target = SimpleNamespace(
         id=uuid4(),
         restaurant_id=restaurant_id,
         category_id=category_id,
         image_url="/media/to-delete.png",
     )
-    delete_file = tmp_path / "to-delete.png"
+    delete_file = tmp_path / "media" / "to-delete.png"
+    delete_file.parent.mkdir(parents=True, exist_ok=True)
     delete_file.write_bytes(b"x")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("controllers.menu_item_controller.redis_client", AsyncRedisStub())
     response = delete_menu(delete_target.id, db=DBSequence([QueryStub(first_value=delete_target)]), current_user=user)
     assert response.status_code == 204
+
+    delete_target2 = SimpleNamespace(
+        id=uuid4(),
+        restaurant_id=restaurant_id,
+        category_id=None,
+        image_url="/media/to-delete-2.png",
+    )
+    (tmp_path / "media").mkdir(exist_ok=True)
+    (tmp_path / "media" / "to-delete-2.png").write_bytes(b"x")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("controllers.menu_item_controller.os.remove", lambda path: None)
+    monkeypatch.setattr("controllers.menu_item_controller.redis_client", BrokenRedisDeleteStub())
+    response = delete_menu(delete_target2.id, db=DBSequence([QueryStub(first_value=delete_target2)]), current_user=user)
+    assert response.status_code == 204
+
+    delete_target3 = SimpleNamespace(
+        id=uuid4(),
+        restaurant_id=restaurant_id,
+        category_id=category_id,
+        image_url="/media/to-delete-3.png",
+    )
+    (tmp_path / "media" / "to-delete-3.png").write_bytes(b"x")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("controllers.menu_item_controller.os.remove", lambda path: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr("controllers.menu_item_controller.redis_client", AsyncRedisStub())
+    response = delete_menu(delete_target3.id, db=DBSequence([QueryStub(first_value=delete_target3)]), current_user=user)
+    assert response.status_code == 204
+
+    with pytest.raises(HTTPException):
+        delete_menu(uuid4(), db=DBSequence([QueryStub(first_value=None)]), current_user=user)
 
     with pytest.raises(HTTPException):
         get_menu_detail(uuid4(), db=DBSequence([QueryStub(first_value=None)]))
@@ -317,17 +433,42 @@ def test_table_controller_paths(monkeypatch, tmp_path):
     assert created.name == "A1"
     assert db.committed >= 3
 
+    with pytest.raises(HTTPException):
+        create_table(TableCreate(restaurant_id=restaurant_id, name="A1", seats=4), db=DBSequence([QueryStub(first_value=table)]))
+
     assert get_table_by_id(table_id, db=DBSequence([QueryStub(first_value=table)])) is table
     assert get_all_tables(db=DBSequence([QueryStub(all_value=[table])])) == [table]
+
+    with pytest.raises(HTTPException):
+        get_table_by_id(uuid4(), db=DBSequence([QueryStub(first_value=None)]))
 
     db = DBSequence([QueryStub(first_value=table), QueryStub(first_value=None)])
     updated = update_table(table_id, TableUpdate(name="A2", seats=6), db=db)
     assert updated.name == "A2"
     assert updated.seats == 6
 
+    same_name_table = SimpleNamespace(
+        id=table_id,
+        restaurant_id=restaurant_id,
+        name="A1",
+        seats=4,
+        status="active",
+        created_at=datetime(2026, 3, 27, 9, 0, 0),
+    )
+    db = DBSequence([QueryStub(first_value=same_name_table)])
+    updated = update_table(table_id, TableUpdate(name="A1"), db=db)
+    assert updated.name == "A1"
+
+    db = DBSequence([QueryStub(first_value=table)])
+    updated = update_table(table_id, TableUpdate(seats=8), db=db)
+    assert updated.seats == 8
+
     duplicate_db = DBSequence([QueryStub(first_value=table), QueryStub(first_value=object())])
     with pytest.raises(HTTPException):
         update_table(table_id, TableUpdate(name="A3"), db=duplicate_db)
+
+    with pytest.raises(HTTPException):
+        update_table(uuid4(), TableUpdate(name="A3"), db=DBSequence([QueryStub(first_value=None)]))
 
     q1 = QueryStub(first_value=table)
     q2 = QueryStub()
@@ -356,3 +497,14 @@ def test_table_controller_paths(monkeypatch, tmp_path):
     )
     delete_table(table_id, db=db, current_user=staff_user())
     assert db.deleted == [table]
+
+    qr_on_disk = tmp_path / "media" / "qrs" / f"table-{table_id}.png"
+    qr_on_disk.parent.mkdir(parents=True, exist_ok=True)
+    qr_on_disk.write_bytes(b"png")
+    monkeypatch.chdir(tmp_path)
+    db = DBSequence([QueryStub(first_value=table), QueryStub(), QueryStub(), QueryStub()])
+    delete_table(table_id, db=db, current_user=staff_user())
+    assert db.deleted == [table]
+
+    with pytest.raises(HTTPException):
+        delete_table(uuid4(), db=DBSequence([QueryStub(first_value=None)]), current_user=staff_user())
