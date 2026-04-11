@@ -163,3 +163,17 @@ def test_get_me_returns_current_user_payload():
 
     assert response["email"] == "owner@example.com"
     assert response["role"] == "owner"
+
+
+def test_get_me_includes_restaurant_id():
+    restaurant_id = uuid.uuid4()
+    current_user = SimpleNamespace(
+        id=uuid.uuid4(),
+        email="staff@example.com",
+        role="staff",
+        restaurant_id=restaurant_id,
+    )
+
+    response = get_me(current_user=current_user)
+
+    assert response["restaurant_id"] == str(restaurant_id)

@@ -312,6 +312,16 @@ def test_review_dashboard_endpoints_transform_rows():
     ]
 
 
+def test_review_dashboard_rejects_empty_menu_item_id():
+    db = DBSequence([QueryStub(all_value=[])])
+
+    with pytest.raises(HTTPException) as exc_info:
+        list_reviews(menu_item_id="", db=db, current_user=owner_user())
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "menu_item_id must not be empty"
+
+
 def test_menu_analytics_endpoints_transform_rows():
     top_db = DBSequence(
         [
