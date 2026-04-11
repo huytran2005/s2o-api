@@ -261,6 +261,23 @@ def test_review_service_and_reward_helpers():
     monkeypatch.undo()
 
 
+def test_order_line_image_url_property():
+    menu_item = SimpleNamespace(image_url="/media/menus/tea.png")
+    order_line = OrderLine(
+        id=uuid4(),
+        order_id=uuid4(),
+        menu_item_id=uuid4(),
+        item_name="Tea",
+        qty=1,
+        unit_price=10,
+        menu_item=menu_item,
+    )
+    assert order_line.image_url == "/media/menus/tea.png"
+
+    order_line.menu_item = None
+    assert order_line.image_url is None
+
+
 def test_misc_schemas_analytics_rabbitmq_and_ws(monkeypatch, capsys):
     PointResponse(total_points=10)
     QRCreateResponse(qr_id=uuid4(), code="abc")

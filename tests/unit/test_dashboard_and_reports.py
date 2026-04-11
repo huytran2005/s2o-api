@@ -187,6 +187,26 @@ def test_list_customers_supports_new_filter():
     assert result[0]["user_id"] == "u-4"
 
 
+def test_list_customers_without_search_or_filter():
+    rows = [
+        SimpleNamespace(
+            user_id="u-5",
+            display_name="Plain Customer",
+            email="plain@example.com",
+            phone="0888",
+            total_orders=4,
+            total_spent=220,
+            total_points=300,
+            last_visit=datetime(2026, 3, 28, 12, 0, 0),
+        )
+    ]
+    db = DBSequence([QueryStub(all_value=rows)])
+
+    result = list_customers(db=db, current_user=owner_user())
+
+    assert result[0]["email"] == "plain@example.com"
+
+
 def test_point_dashboard_endpoints_transform_rows():
     summary_db = DBSequence(
         [

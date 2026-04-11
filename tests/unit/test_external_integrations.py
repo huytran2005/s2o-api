@@ -148,6 +148,49 @@ def test_handle_event_skips_reward_when_duplicate(monkeypatch):
     assert db.closed is True
 
 
+def test_handle_event_skips_reward_when_not_served(monkeypatch):
+    order = SimpleNamespace(id="order-1", user_id="user-1", total_amount=50000)
+    user = SimpleNamespace(id="user-1")
+    db = FakeDB({Order: order, User: user})
+    calls = []
+
+    monkeypatch.setattr(mq_worker, "SessionLocal", lambda: db)
+    monkeypatch.setattr(mq_worker, "log_analytics", lambda db, event, payload: calls.append(("analytics", event)))
+    monkeypatch.setattr(mq_worker, "notify_order_status", lambda found_user, status: calls.append(("notify", found_user.id, status)))
+    monkeypatch.setattr(mq_worker, "reward_on_order_served", lambda *args, **kwargs: calls.append("reward"))
+
+    mq_worker.handle_event(
+        "ORDER_STATUS_UPDATED",
+        {"order_id": "order-1", "status": "preparing"},
+    )
+
+    assert ("notify", "user-1", "preparing") in calls
+    assert "reward" not in calls
+    assert db.committed is False
+    assert db.closed is True
+
+
+def test_handle_event_skips_notification_when_no_user(monkeypatch):
+    order = SimpleNamespace(id="order-1", user_id=None, total_amount=50000)
+    db = FakeDB({Order: order})
+    calls = []
+
+    monkeypatch.setattr(mq_worker, "SessionLocal", lambda: db)
+    monkeypatch.setattr(mq_worker, "log_analytics", lambda db, event, payload: calls.append(("analytics", event)))
+    monkeypatch.setattr(mq_worker, "notify_order_status", lambda *args, **kwargs: calls.append("notify"))
+    monkeypatch.setattr(mq_worker, "reward_on_order_served", lambda *args, **kwargs: calls.append("reward"))
+
+    mq_worker.handle_event(
+        "ORDER_STATUS_UPDATED",
+        {"order_id": "order-1", "status": "served"},
+    )
+
+    assert "notify" not in calls
+    assert "reward" not in calls
+    assert db.committed is False
+    assert db.closed is True
+
+
 def test_handle_event_returns_when_order_missing(monkeypatch):
     db = FakeDB({Order: None})
     calls = []
