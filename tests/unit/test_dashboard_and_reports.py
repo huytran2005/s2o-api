@@ -147,6 +147,46 @@ def test_list_customers_handles_filters_and_email_fallback():
     assert result[0]["last_visit"] is None
 
 
+def test_list_customers_supports_high_points_filter():
+    rows = [
+        SimpleNamespace(
+            user_id="u-3",
+            display_name="High Points",
+            email="points@example.com",
+            phone="0123",
+            total_orders=5,
+            total_spent=500,
+            total_points=1500,
+            last_visit=datetime(2026, 3, 28, 10, 0, 0),
+        )
+    ]
+    db = DBSequence([QueryStub(all_value=rows)])
+
+    result = list_customers(filter="high_points", db=db, current_user=owner_user())
+
+    assert result[0]["total_points"] == 1500
+
+
+def test_list_customers_supports_new_filter():
+    rows = [
+        SimpleNamespace(
+            user_id="u-4",
+            display_name="New Customer",
+            email="new@example.com",
+            phone="0900",
+            total_orders=1,
+            total_spent=50,
+            total_points=20,
+            last_visit=datetime(2026, 3, 28, 11, 0, 0),
+        )
+    ]
+    db = DBSequence([QueryStub(all_value=rows)])
+
+    result = list_customers(filter="new", db=db, current_user=owner_user())
+
+    assert result[0]["user_id"] == "u-4"
+
+
 def test_point_dashboard_endpoints_transform_rows():
     summary_db = DBSequence(
         [
