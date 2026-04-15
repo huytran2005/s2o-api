@@ -1,7 +1,25 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.cors import CORSMiddleware
+
+from db.init import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifecycle events.
+
+    Startup: Initialize database tables.
+    Shutdown: Currently no cleanup needed.
+    """
+    # Startup event
+    init_db()
+    yield
+    # Shutdown event (if needed in the future)
+
 
 def create_app() -> FastAPI:
     from controllers.auth_controller import router as auth_router
@@ -28,7 +46,7 @@ def create_app() -> FastAPI:
     )
     from controllers.table_controller import router as table_router
 
-    app = FastAPI(title="S2O API")
+    app = FastAPI(title="S2O API", lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
