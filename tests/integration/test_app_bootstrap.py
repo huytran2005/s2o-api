@@ -17,6 +17,6 @@ def test_app_startup_creates_db_tables(mocker):
     create_all_mock = mocker.patch("db.database.Base.metadata.create_all")
 
     app = create_app()
-    client = TestClient(app)
+    TestClient(app)
 
     create_all_mock.assert_called_once_with(bind=engine)
