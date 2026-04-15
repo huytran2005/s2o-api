@@ -3,10 +3,8 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.cors import CORSMiddleware
 
-# ✅ ADD: import DB + models
 from db.database import Base, engine
-from models import *  # quan trọng: để SQLAlchemy biết model
-
+import models
 def create_app() -> FastAPI:
     from controllers.auth_controller import router as auth_router
     from controllers.category_controller import router as category_router

@@ -1,22 +1,22 @@
-# FORCE LOAD ALL SQLALCHEMY MODELS
+# models/__init__.py
 
-from models.tenant import Tenant
+from .tenant import Tenant
 
-from models.user import User
-from models.user_point import UserPoint
+from .user import User
+from .user_point import UserPoint
 
-from models.restaurant import Restaurant
-from models.restaurant_table import RestaurantTable
+from .restaurant import Restaurant
+from .restaurant_table import RestaurantTable
 
-from models.category import Category
-from models.menu_item import MenuItem
+from .category import Category
+from .menu_item import MenuItem
 
-from models.qr_code import QRCode
-from models.guest_session import GuestSession
+from .qr_code import QRCode
+from .guest_session import GuestSession
 
-from models.order import Order
-from models.order_line import OrderLine
-from models.order_status_history import OrderStatusHistory
+from .order import Order
+from .order_line import OrderLine
+from .order_status_history import OrderStatusHistory
 
-from models.point_transaction import PointTransaction
-from models.review import MenuItemReview
+from .point_transaction import PointTransaction
+from .review import MenuItemReview
