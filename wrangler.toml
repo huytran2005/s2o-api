@@ -1,0 +1,7 @@
+name = "s2o-api-workers"
+main = "worker.py"
+compatibility_date = "2026-04-15"
+compatibility_flags = ["python_workers"]
+
+account_id = "bf11dfff0aeb2f6e0defbb9c949cb7d6"
+workers_dev = true

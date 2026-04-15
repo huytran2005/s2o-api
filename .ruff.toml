@@ -1,0 +1,9 @@
+[lint]
+ignore = [
+  "E402",
+  "F811",
+  "F401",
+  "E712",
+  "E722",  # bare except
+  "F541"   # f-string không cần thiết
+]
