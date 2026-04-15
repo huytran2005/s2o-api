@@ -1,5 +1,5 @@
-    from workers import WorkerEntrypoint, Response
+from workers import WorkerEntrypoint, Response
 
-    class Default(WorkerEntrypoint):
-        async def fetch(self, request):
-            return Response("ok")
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        return Response("ok")
