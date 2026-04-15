@@ -5,6 +5,8 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db.database import Base, engine
 import models
+
+
 def create_app() -> FastAPI:
     from controllers.auth_controller import router as auth_router
     from controllers.category_controller import router as category_router
@@ -32,8 +34,10 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="S2O API")
 
-    # ✅ ADD: tạo table khi app start
-    Base.metadata.create_all(bind=engine)
+    # ✅ FIX: chỉ tạo table khi app thực sự start (không chạy khi import)
+    @app.on_event("startup")
+    def on_startup():
+        Base.metadata.create_all(bind=engine)
 
     app.add_middleware(
         CORSMiddleware,
