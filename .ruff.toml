@@ -3,3 +3,8 @@ exclude = [
   ".venv",
   "__pycache__"
 ]
+
+ignore = [
+  "E402",  # import not at top
+  "F811"   # redefinition
+]
