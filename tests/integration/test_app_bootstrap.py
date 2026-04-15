@@ -1,5 +1,6 @@
 from main import create_app
 from db.database import Base, engine
+from fastapi.testclient import TestClient
 
 
 def test_create_app_registers_core_routes():
@@ -13,12 +14,9 @@ def test_create_app_registers_core_routes():
 
 
 def test_app_startup_creates_db_tables(mocker):
-    # Mock Base.metadata.create_all to prevent actual table creation during test
     create_all_mock = mocker.patch("db.database.Base.metadata.create_all")
 
-    # Create the app, which will trigger the on_startup event
-    create_app()
+    app = create_app()
+    client = TestClient(app)
 
-    # Assert that create_all was called
     create_all_mock.assert_called_once_with(bind=engine)
-
