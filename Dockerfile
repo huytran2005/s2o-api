@@ -12,10 +12,10 @@ RUN pip install --no-cache-dir -r requirements.docker.txt
 
 COPY . .
 
-# FIX ENTRYPOINT
+# Copy entrypoint
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-EXPOSE 8000
+EXPOSE 10000
 
 ENTRYPOINT ["/app/entrypoint.sh"]
