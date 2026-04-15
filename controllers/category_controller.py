@@ -62,3 +62,23 @@ def list_categories(
         .order_by(Category.name)
         .all()
     )
+
+@router.delete("/{category_id}", status_code=204)
+def delete_category(
+    category_id: UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    require_roles(current_user, ["staff", "owner"])
+
+    category = (
+        db.query(Category)
+        .filter(Category.id == category_id)
+        .first()
+    )
+
+    if category:
+        db.delete(category)
+        db.commit()
+
+    return None

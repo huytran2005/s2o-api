@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from controllers.category_controller import create_category, list_categories
+from controllers.category_controller import create_category, list_categories, delete_category
 from models.category import Category
 from schemas.category_schema import CategoryCreate
 
@@ -34,6 +34,7 @@ class DBStub:
         self.added = []
         self.committed = False
         self.refreshed = []
+        self.deleted = []
 
     def query(self, model):
         if model is Category and self.existing is not None:
@@ -50,6 +51,9 @@ class DBStub:
 
     def refresh(self, instance):
         self.refreshed.append(instance)
+
+    def delete(self, instance):
+        self.deleted.append(instance)
 
 
 def test_create_category_trims_name_and_persists():
@@ -91,3 +95,34 @@ def test_list_categories_returns_ordered_collection():
     result = list_categories(restaurant_id=uuid.uuid4(), db=db)
 
     assert result == categories
+
+
+def test_delete_category_existing_returns_204():
+    existing_category = SimpleNamespace(id=uuid.uuid4())
+    db = DBStub(existing=existing_category)
+    user = SimpleNamespace(role="owner")
+
+    result = delete_category(
+        category_id=existing_category.id,
+        db=db,
+        current_user=user,
+    )
+
+    assert result is None
+    assert db.deleted
+    assert db.committed
+
+
+def test_delete_category_nonexistent_returns_204():
+    db = DBStub(existing=None)
+    user = SimpleNamespace(role="owner")
+
+    result = delete_category(
+        category_id=uuid.uuid4(),
+        db=db,
+        current_user=user,
+    )
+
+    assert result is None
+    assert not db.deleted
+    assert not db.committed
