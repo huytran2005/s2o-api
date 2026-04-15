@@ -39,7 +39,9 @@ jobs:
           RABBITMQ_URL: amqp://guest:guest@localhost:5672/
           REDIS_HOST: localhost
           REDIS_PORT: "6379"
-        run: pytest
+        run: |
+          coverage run --source=./ -m pytest
+          coverage xml -o coverage.xml
 
       - name: SonarQube Scan
         if: ${{ env.SONAR_TOKEN != '' }}
