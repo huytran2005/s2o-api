@@ -3,6 +3,9 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.cors import CORSMiddleware
 
+# 👉 IMPORT DB
+from db.database import Base, engine  # chỉnh lại path nếu khác
+
 def create_app() -> FastAPI:
     from controllers.auth_controller import router as auth_router
     from controllers.category_controller import router as category_router
@@ -30,6 +33,9 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="S2O API")
 
+    # 👉 FIX: tự tạo table nếu chưa có
+    Base.metadata.create_all(bind=engine)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -37,6 +43,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
     # Static files
     app.mount("/media", StaticFiles(directory="media"), name="media")
 
