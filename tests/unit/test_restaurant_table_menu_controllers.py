@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
@@ -157,15 +158,24 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
     user = owner_user()
     existing = SimpleNamespace(id=uuid4(), name="R1", description="Old", owner_id=user.id, image_preview=None)
     db = DBSequence([QueryStub(all_value=[existing])])
-    assert list_restaurants(db=db, current_user=user) == [existing]
+    result = list_restaurants(db=db, current_user=user)
+    assert result == [
+        {
+            "id": existing.id,
+            "name": existing.name,
+            "description": existing.description,
+            "image_preview": existing.image_preview,
+            "staff_members": []
+        }
+    ]
 
     db = DBSequence([])
-    created = create_restaurant(
+    created = asyncio.run(create_restaurant(
         RestaurantCreate(name="R1", description="Desc"),
         db=db,
         current_user=user,
-    )
-    assert created.name == "R1"
+    ))
+    assert created["name"] == "R1"
     assert db.committed == 1
 
     redis = AsyncRedisStub()
@@ -175,10 +185,10 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
         description="Desc",
         image_preview="/media/restaurants/preview.png",
     )
-    db = DBSequence([QueryStub(first_value=restaurant)])
+    # Mocking staff as empty list for simplicity in this test
+    db = DBSequence([QueryStub(first_value=restaurant), QueryStub(all_value=[])])
     response = Response()
     monkeypatch.setattr("controllers.restaurant_controller.redis_client", redis)
-    import asyncio
     result = asyncio.run(get_restaurant(restaurant.id, response=response, db=db))
     assert result["name"] == "R2"
     assert response.headers["X-Cache"] == "MISS"
@@ -186,29 +196,36 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
     with pytest.raises(HTTPException):
         asyncio.run(get_restaurant(uuid4(), response=Response(), db=DBSequence([QueryStub(first_value=None)])))
 
-    db = DBSequence([QueryStub(first_value=existing)])
-    updated = update_restaurant(
+    # Mocking staff as empty list for simplicity in this test
+    db = DBSequence([QueryStub(first_value=existing), QueryStub(all_value=[])])
+    updated = asyncio.run(update_restaurant(
         existing.id,
         RestaurantUpdate(name="Renamed"),
         db=db,
         current_user=user,
-    )
-    assert updated.name == "Renamed"
+    ))
+    assert updated["name"] == "Renamed"
 
     old_file = tmp_path / "old.png"
     old_file.write_bytes(b"old")
     restaurant.image_preview = str(old_file)
     db = DBSequence([QueryStub(first_value=restaurant)])
     monkeypatch.setattr("controllers.restaurant_controller.save_restaurant_image", lambda image: "/media/restaurants/new.png")
-    upload = UploadFile(filename="preview.png", file=BytesIO(b"new"))
-    result = update_preview_image(restaurant.id, image=upload, db=db, current_user=user)
+    upload = SimpleNamespace(
+        filename="preview.png",
+        file=BytesIO(b"new" * 100000),
+        content_type="image/png",
+        read=lambda: asyncio.to_thread(lambda: b"new" * 100000),
+    )
+    # Mocking UploadFile instance check if necessary, or just rely on dynamic typing
+    result = asyncio.run(update_preview_image(restaurant.id, image=upload, db=db, current_user=user))
     assert result == {"image_preview": "/media/restaurants/new.png"}
 
     old_file.write_bytes(b"old")
     restaurant.image_preview = str(old_file)
     monkeypatch.setattr("controllers.restaurant_controller.os.remove", lambda path: None)
     db = DBSequence([QueryStub(first_value=restaurant)])
-    result = update_preview_image(restaurant.id, image=upload, db=db, current_user=user)
+    result = asyncio.run(update_preview_image(restaurant.id, image=upload, db=db, current_user=user))
     assert result["image_preview"] == "/media/restaurants/new.png"
 
     old_file.write_bytes(b"old")
@@ -218,14 +235,14 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
         lambda path: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     db = DBSequence([QueryStub(first_value=restaurant)])
-    result = update_preview_image(restaurant.id, image=upload, db=db, current_user=user)
+    result = asyncio.run(update_preview_image(restaurant.id, image=upload, db=db, current_user=user))
     assert result["image_preview"] == "/media/restaurants/new.png"
 
     to_delete = SimpleNamespace(id=uuid4(), image_preview=str(tmp_path / "delete.png"))
     Path(to_delete.image_preview).write_bytes(b"x")
     admin = SimpleNamespace(id=uuid4(), role="admin")
     db = DBSequence([QueryStub(first_value=to_delete)])
-    result = delete_restaurant(to_delete.id, db=db, current_user=admin)
+    result = asyncio.run(delete_restaurant(to_delete.id, db=db, current_user=admin))
     assert result == {"message": "Restaurant deleted"}
     assert db.deleted == [to_delete]
 
@@ -233,21 +250,21 @@ def test_restaurant_controller_crud(monkeypatch, tmp_path):
     Path(delete_with_image.image_preview).write_bytes(b"x")
     db = DBSequence([QueryStub(first_value=delete_with_image)])
     monkeypatch.setattr("controllers.restaurant_controller.os.remove", lambda path: (_ for _ in ()).throw(RuntimeError("boom")))
-    result = delete_restaurant(delete_with_image.id, db=db, current_user=admin)
+    result = asyncio.run(delete_restaurant(delete_with_image.id, db=db, current_user=admin))
     assert result == {"message": "Restaurant deleted"}
 
     with pytest.raises(HTTPException):
-        update_preview_image(uuid4(), image=upload, db=DBSequence([QueryStub(first_value=None)]), current_user=user)
+        asyncio.run(update_preview_image(uuid4(), image=upload, db=DBSequence([QueryStub(first_value=None)]), current_user=user))
 
     with pytest.raises(HTTPException):
-        delete_restaurant(uuid4(), db=DBSequence([QueryStub(first_value=None)]), current_user=admin)
+        asyncio.run(delete_restaurant(uuid4(), db=DBSequence([QueryStub(first_value=None)]), current_user=admin))
 
     with pytest.raises(HTTPException):
-        create_restaurant(
+        asyncio.run(create_restaurant(
             RestaurantCreate(name="Nope", description="Denied"),
             db=DBSequence([]),
             current_user=SimpleNamespace(id=uuid4(), role="customer"),
-        )
+        ))
 
 
 def test_restaurant_get_uses_cache_when_available(monkeypatch):
