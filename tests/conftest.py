@@ -48,13 +48,15 @@ class FakeQuery:
                         if str(val_r) == value:
                             temp_rows.append(r)
                             continue
-                    except: pass
+                    except Exception:
+                        pass
                 elif isinstance(value, uuid.UUID) and isinstance(val_r, str):
                     try:
                         if str(value) == val_r:
                             temp_rows.append(r)
                             continue
-                    except: pass
+                    except Exception:
+                        pass
                 
                 if val_r == value:
                     temp_rows.append(r)
