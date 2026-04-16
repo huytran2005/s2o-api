@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import Annotated
 
 from db.session import get_db
 from models.user import User
@@ -21,8 +22,19 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 # =========================
 # REGISTER OWNER (SaaS)
 # =========================
-@router.post("/register-owner", response_model=RegisterResponse, status_code=201)
-def register_owner(data: RegisterOwnerRequest, db: Session = Depends(get_db)):
+@router.post(
+    "/register-owner",
+    response_model=RegisterResponse,
+    status_code=201,
+    responses={
+        400: {"description": "Email already exists"},
+        500: {"description": "Internal Server Error during registration"}
+    }
+)
+def register_owner(
+    data: RegisterOwnerRequest,
+    db: Annotated[Session, Depends(get_db)]
+):
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
 
@@ -46,8 +58,19 @@ def register_owner(data: RegisterOwnerRequest, db: Session = Depends(get_db)):
 # =========================
 # REGISTER CUSTOMER
 # =========================
-@router.post("/register", response_model=RegisterResponse, status_code=201)
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
+@router.post(
+    "/register",
+    response_model=RegisterResponse,
+    status_code=201,
+    responses={
+        400: {"description": "Email already exists"},
+        500: {"description": "Internal Server Error during registration"}
+    }
+)
+def register(
+    data: RegisterRequest,
+    db: Annotated[Session, Depends(get_db)]
+):
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
 
@@ -73,8 +96,18 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 # =========================
 # LOGIN
 # =========================
-@router.post("/login", response_model=LoginResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+@router.post(
+    "/login",
+    response_model=LoginResponse,
+    responses={
+        401: {"description": "Invalid credentials"},
+        403: {"description": "Staff account not bound to restaurant"}
+    }
+)
+def login(
+    data: LoginRequest,
+    db: Annotated[Session, Depends(get_db)]
+):
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password_hash):
@@ -103,7 +136,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 # GET CURRENT USER
 # =========================
 @router.get("/me")
-def get_me(current_user=Depends(get_current_user)):
+def get_me(current_user: Annotated[User, Depends(get_current_user)]):
     return {
         "id": str(current_user.id),
         "email": current_user.email,

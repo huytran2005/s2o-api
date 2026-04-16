@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from uuid import UUID
+from typing import Annotated
 
 from db.session import get_db
 from models.user import User
@@ -16,12 +17,19 @@ router = APIRouter(prefix="", tags=["User"])
 # =========================
 # CREATE STAFF (MULTI RESTAURANT)
 # =========================
-@router.post("/restaurants/{restaurant_id}/staff", response_model=CreateStaffResponse)
+@router.post(
+    "/restaurants/{restaurant_id}/staff",
+    response_model=CreateStaffResponse,
+    responses={
+        400: {"description": "Email already exists"},
+        403: {"description": "Forbidden - Only owner can create staff or restaurant not found"},
+    }
+)
 def create_staff(
     restaurant_id: UUID,
     data: CreateStaffRequest,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ):
     # check role
     if current_user.role != "owner":
