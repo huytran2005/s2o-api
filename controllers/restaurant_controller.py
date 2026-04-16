@@ -1,4 +1,5 @@
 import os
+import json
 from uuid import UUID
 
 from fastapi import (
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from db.database import get_db
 from models.restaurant import Restaurant
+from models.user import User
 from schemas.restaurant_schema import (
     RestaurantCreate,
     RestaurantUpdate,
@@ -22,15 +24,18 @@ from utils.dependencies import get_current_user
 from utils.permissions import require_roles
 from utils.file_upload import save_restaurant_image
 from utils.redis import redis_client
-import json
-
-CACHE_TTL = 30
 
 router = APIRouter(
     prefix="/restaurants",
     tags=["Restaurant"]
 )
 
+CACHE_TTL = 60
+
+
+# ======================
+# LIST RESTAURANTS
+# ======================
 @router.get("/", response_model=list[RestaurantResponse])
 def list_restaurants(
     db: Session = Depends(get_db),
@@ -38,17 +43,25 @@ def list_restaurants(
 ):
     require_roles(current_user, ["owner", "admin"])
 
-    return (
-        db.query(Restaurant)
-        .filter(Restaurant.owner_id == current_user.id)
-        .all()
-    )
+    restaurants = db.query(Restaurant).filter(
+        Restaurant.owner_id == current_user.id
+    ).all()
 
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "description": r.description,
+            "image_preview": r.image_preview,
+            "staff_members": []
+        }
+        for r in restaurants
+    ]
 # ======================
 # CREATE RESTAURANT
 # ======================
 @router.post("/", response_model=RestaurantResponse, status_code=201)
-def create_restaurant(
+async def create_restaurant(
     data: RestaurantCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -59,14 +72,22 @@ def create_restaurant(
         **data.model_dump(),
         owner_id=current_user.id
     )
+
     db.add(restaurant)
     db.commit()
     db.refresh(restaurant)
-    return restaurant
+
+    return {
+        "id": restaurant.id,
+        "name": restaurant.name,
+        "description": restaurant.description,
+        "image_preview": restaurant.image_preview,
+        "staff_members": []
+    }
 
 
 # ======================
-# LIST RESTAURANTS
+# GET RESTAURANT DETAIL
 # ======================
 @router.get("/{restaurant_id}", response_model=RestaurantResponse)
 async def get_restaurant(
@@ -76,34 +97,60 @@ async def get_restaurant(
 ):
     cache_key = f"restaurant:{restaurant_id}"
 
-    cached = await redis_client.get(cache_key)
-    if cached:
-        response.headers["X-Cache"] = "HIT"
-        return json.loads(cached)
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            response.headers["X-Cache"] = "HIT"
+            return json.loads(cached)
+    except Exception:
+        pass
 
     restaurant = db.query(Restaurant).filter(
         Restaurant.id == restaurant_id
     ).first()
 
     if not restaurant:
-        raise HTTPException(404, "Restaurant not found")
+        raise HTTPException(status_code=404, detail="Restaurant not found")
 
-    data = RestaurantResponse.model_validate(restaurant).model_dump()
+    staff = db.query(User).filter(
+        User.restaurant_id == restaurant_id
+    ).all()
 
-    await redis_client.setex(
-        cache_key,
-        60,
-        json.dumps(data, default=str)
-    )
+    result = {
+        "id": restaurant.id,
+        "name": restaurant.name,
+        "description": restaurant.description,
+        "image_preview": restaurant.image_preview,
+        "staff_members": [
+            {
+                "id": s.id,
+                "email": s.email,
+                "display_name": s.display_name,
+                "phone": s.phone,
+                "role": s.role,
+            }
+            for s in staff
+        ]
+    }
+
+    try:
+        await redis_client.setex(
+            cache_key,
+            CACHE_TTL,
+            json.dumps(result, default=str)
+        )
+    except Exception:
+        pass
 
     response.headers["X-Cache"] = "MISS"
-    return data
+    return result
+
 
 # ======================
-# UPDATE RESTAURANT INFO
+# UPDATE RESTAURANT
 # ======================
 @router.put("/{restaurant_id}", response_model=RestaurantResponse)
-def update_restaurant(
+async def update_restaurant(
     restaurant_id: UUID,
     data: RestaurantUpdate,
     db: Session = Depends(get_db),
@@ -117,21 +164,46 @@ def update_restaurant(
     ).first()
 
     if not restaurant:
-        raise HTTPException(404, "Restaurant not found")
+        raise HTTPException(status_code=404, detail="Restaurant not found")
 
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(restaurant, key, value)
 
     db.commit()
     db.refresh(restaurant)
-    return restaurant
+
+    try:
+        await redis_client.delete(f"restaurant:{restaurant_id}")
+    except Exception:
+        pass
+
+    staff = db.query(User).filter(
+        User.restaurant_id == restaurant_id
+    ).all()
+
+    return {
+        "id": restaurant.id,
+        "name": restaurant.name,
+        "description": restaurant.description,
+        "image_preview": restaurant.image_preview,
+        "staff_members": [
+            {
+                "id": s.id,
+                "email": s.email,
+                "display_name": s.display_name,
+                "phone": s.phone,
+                "role": s.role,
+            }
+            for s in staff
+        ]
+    }
 
 
 # ======================
-# UPDATE PREVIEW IMAGE (REPLACE)
+# UPDATE PREVIEW IMAGE
 # ======================
 @router.put("/{restaurant_id}/preview-image")
-def update_preview_image(
+async def update_preview_image(
     restaurant_id: UUID,
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -145,35 +217,47 @@ def update_preview_image(
     ).first()
 
     if not restaurant:
-        raise HTTPException(404, "Restaurant not found")
+        raise HTTPException(status_code=404, detail="Restaurant not found")
 
-    # 1️⃣ lưu đường dẫn ảnh cũ
+    # VALIDATE FORMAT
+    ALLOWED_TYPES = ["image/jpeg", "image/png", "image/jpg", "image/webp"]
+    if image.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid image format")
+
+    # VALIDATE SIZE
+    contents = await image.read()
+    size = len(contents)
+
+    if size < 100 * 1024 or size > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Invalid image size")
+
+    image.file.seek(0)
+
     old_image = restaurant.image_preview
-
-    # 2️⃣ lưu ảnh mới
     new_image = save_restaurant_image(image)
 
-    # 3️⃣ update DB
     restaurant.image_preview = new_image
     db.commit()
 
-    # 4️⃣ xoá file cũ (sau commit)
     if old_image and os.path.exists(old_image):
         try:
             os.remove(old_image)
         except Exception:
             pass
 
-    return {
-        "image_preview": new_image
-    }
+    try:
+        await redis_client.delete(f"restaurant:{restaurant_id}")
+    except Exception:
+        pass
+
+    return {"image_preview": new_image}
 
 
 # ======================
 # DELETE RESTAURANT
 # ======================
 @router.delete("/{restaurant_id}")
-def delete_restaurant(
+async def delete_restaurant(
     restaurant_id: UUID,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -185,9 +269,8 @@ def delete_restaurant(
     ).first()
 
     if not restaurant:
-        raise HTTPException(404, "Restaurant not found")
+        raise HTTPException(status_code=404, detail="Restaurant not found")
 
-    # xoá ảnh preview nếu có
     if restaurant.image_preview and os.path.exists(restaurant.image_preview):
         try:
             os.remove(restaurant.image_preview)
@@ -196,5 +279,10 @@ def delete_restaurant(
 
     db.delete(restaurant)
     db.commit()
+
+    try:
+        await redis_client.delete(f"restaurant:{restaurant_id}")
+    except Exception:
+        pass
 
     return {"message": "Restaurant deleted"}
