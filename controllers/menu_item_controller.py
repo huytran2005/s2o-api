@@ -77,7 +77,7 @@ def filter_menu_items_by_price(
 # CREATE MENU
 # ======================
 @router.post("/", response_model=MenuOut)
-def create_menu(
+async def create_menu(
     restaurant_id: UUID,
     data: MenuCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -97,7 +97,25 @@ def create_menu(
     db.add(menu)
     db.commit()
     db.refresh(menu)
-    return menu
+
+    # CLEAR CACHE
+    try:
+        await redis_client.delete(f"menu:guest:{restaurant_id}:all")
+        if data.category_id:
+            await redis_client.delete(f"menu:guest:{restaurant_id}:{data.category_id}")
+    except Exception as e:
+        print("⚠️ Redis clear failed:", e)
+
+    return MenuOut(
+        id=menu.id,
+        name=menu.name,
+        description=menu.description,
+        price=menu.price,
+        image_url=menu.image_url,
+        is_available=menu.is_available,
+        category_id=menu.category_id,
+        category_name=menu.category.name if menu.category else None,
+    )
 
 
 # ======================
@@ -135,7 +153,7 @@ async def list_menus_guest(
 
     menus = query.all()
 
-    data = [
+    result = [
         MenuOut(
             id=m.id,
             name=m.name,
@@ -153,20 +171,20 @@ async def list_menus_guest(
         await redis_client.setex(
             cache_key,
             CACHE_TTL,
-            json.dumps(data, default=str)
+            json.dumps(result, default=str)
         )
         response.headers["X-Cache"] = "MISS"
     except Exception as e:
         print("⚠️ Redis set failed:", e)
 
-    return data
+    return result
 
 @router.get(
     "/{menu_id}",
     response_model=MenuOut,
     responses={404: {"description": MENU_NOT_FOUND_DETAIL}},
 )
-def get_menu_detail(
+async def get_menu_detail(
     menu_id: UUID,
     db: Annotated[Session, Depends(get_db)],
 ):
@@ -194,7 +212,7 @@ def get_menu_detail(
         category_name=menu.category.name if menu.category else None,
     )
 @router.post("/with-image", response_model=MenuOut)
-def create_menu_with_image(
+async def create_menu_with_image(
     restaurant_id: Annotated[UUID, Query(...)],
     name: Annotated[str, Form(...)],
     category_id: Annotated[UUID, Form(...)],
@@ -225,6 +243,13 @@ def create_menu_with_image(
     db.commit()
     db.refresh(menu)
 
+    # CLEAR CACHE
+    try:
+        await redis_client.delete(f"menu:guest:{restaurant_id}:all")
+        await redis_client.delete(f"menu:guest:{restaurant_id}:{category_id}")
+    except Exception as e:
+        print("⚠️ Redis clear failed:", e)
+
     return MenuOut(
         id=menu.id,
         name=menu.name,
@@ -240,7 +265,7 @@ def create_menu_with_image(
     status_code=204,
     responses={404: {"description": MENU_NOT_FOUND_DETAIL}},
 )
-def delete_menu(
+async def delete_menu(
     menu_id: UUID,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[object, Depends(get_current_user)],
@@ -284,11 +309,11 @@ def delete_menu(
     # ======================
     try:
         # all menus
-        redis_client.delete(f"menu:guest:{restaurant_id}:all")
+        await redis_client.delete(f"menu:guest:{restaurant_id}:all")
 
         # menu theo category
         if category_id:
-            redis_client.delete(f"menu:guest:{restaurant_id}:{category_id}")
+            await redis_client.delete(f"menu:guest:{restaurant_id}:{category_id}")
 
     except Exception as e:
         print("⚠️ Redis clear failed:", e)
@@ -300,7 +325,7 @@ def delete_menu(
     response_model=MenuOut,
     responses={404: {"description": MENU_NOT_FOUND_DETAIL}},
 )
-def update_menu_image(
+async def update_menu_image(
     menu_id: UUID,
     image: UploadFile = File(...),
     *,
@@ -339,7 +364,9 @@ def update_menu_image(
 
     # clear cache
     try:
-        redis_client.delete(f"menu:guest:{menu.restaurant_id}:all")
+        await redis_client.delete(f"menu:guest:{menu.restaurant_id}:all")
+        if menu.category_id:
+            await redis_client.delete(f"menu:guest:{menu.restaurant_id}:{menu.category_id}")
     except Exception:
         pass
 

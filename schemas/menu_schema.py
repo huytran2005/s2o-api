@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from typing import Optional, Dict, Any
 from decimal import Decimal
@@ -10,13 +10,15 @@ class MenuCreate(BaseModel):
     category_id: UUID
     image_url: Optional[str] = None
     meta: Optional[Dict[str, Any]] = None
+
 class MenuOut(BaseModel):
     id: UUID
     name: str
+    description: Optional[str] = None
     price: Decimal
     image_url: Optional[str] = None
     is_available: bool
     category_id: UUID | None = None
     category_name: str | None = None
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
