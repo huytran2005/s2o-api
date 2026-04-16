@@ -9,6 +9,8 @@ def create_app() -> FastAPI:
     from controllers.customer_dashboard_controller import (
         router as customer_dashboard_router,
     )
+    from controllers import user_controller
+
     from controllers.guest import router as guest_router
     from controllers.health_controller import router as health_router
     from controllers.menu_analytics_controller import (
@@ -37,10 +39,12 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.include_router(user_controller.router)
     # Static files
     app.mount("/media", StaticFiles(directory="media"), name="media")
 
     # Routers
+
     app.include_router(auth_router)
     app.include_router(restaurant_router)
     app.include_router(table_router)

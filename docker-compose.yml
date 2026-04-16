@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   postgres:
     image: postgres:16
@@ -27,21 +29,33 @@ services:
     networks:
       - s2o-network
 
+  redis:
+    image: redis:7
+    container_name: s2o-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - s2o-network
+
   api:
     image: s2o-api:test
     build: .
     container_name: s2o-api
     ports:
-      - "8000:8000"
+      - "10000:10000"
     env_file:
       - .env.docker
     environment:
-      BASE_URL: http://localhost:8000
+      BASE_URL: http://localhost:10000
+      REDIS_HOST: redis         # 🔥 thêm cho rõ ràng
+      REDIS_PORT: 6379
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_started
+      redis:
+        condition: service_started   # 🔥 thêm redis
     networks:
       - s2o-network
 

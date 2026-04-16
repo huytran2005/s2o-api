@@ -1,11 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import Annotated
 
 from db.session import get_db
 from models.user import User
+from models.restaurant import Restaurant
 from schemas.auth_schema import (
-    RegisterRequest, RegisterResponse,
-    LoginRequest, LoginResponse
+    RegisterRequest,
+    RegisterResponse,
+    RegisterOwnerRequest,
+    LoginRequest,
+    LoginResponse
 )
 from utils.security import hash_password, verify_password
 from utils.jwt import create_access_token
@@ -14,33 +19,101 @@ from utils.dependencies import get_current_user
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post("/register", response_model=RegisterResponse)
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
+# =========================
+# REGISTER OWNER (SaaS)
+# =========================
+@router.post(
+    "/register-owner",
+    response_model=RegisterResponse,
+    status_code=201,
+    responses={
+        400: {"description": "Email already exists"},
+        500: {"description": "Internal Server Error during registration"}
+    }
+)
+def register_owner(
+    data: RegisterOwnerRequest,
+    db: Annotated[Session, Depends(get_db)]
+):
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    user = User(
-        email=data.email,
-        password_hash=hash_password(data.password),
-        display_name=data.display_name,
-        phone=data.phone,
-        role="customer",
-    )
+    try:
+        user = User(
+            email=data.email,
+            password_hash=hash_password(data.password),
+            display_name=data.display_name,
+            phone=data.phone,
+            role="owner",
+        )
 
-    db.add(user)
-    db.commit()
+        db.add(user)
+        db.commit()
 
-    return {"message": "Register successful"}
+        return {"message": "Register successful"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+# =========================
+# REGISTER CUSTOMER
+# =========================
+@router.post(
+    "/register",
+    response_model=RegisterResponse,
+    status_code=201,
+    responses={
+        400: {"description": "Email already exists"},
+        500: {"description": "Internal Server Error during registration"}
+    }
+)
+def register(
+    data: RegisterRequest,
+    db: Annotated[Session, Depends(get_db)]
+):
+    if db.query(User).filter(User.email == data.email).first():
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+    try:
+        user = User(
+            email=data.email,
+            password_hash=hash_password(data.password),
+            display_name=data.display_name,
+            phone=data.phone,
+            role="customer",
+        )
+
+        db.add(user)
+        db.commit()
+
+        return {"message": "Register successful"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/login", response_model=LoginResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+# =========================
+# LOGIN
+# =========================
+@router.post(
+    "/login",
+    response_model=LoginResponse,
+    responses={
+        401: {"description": "Invalid credentials"},
+        403: {"description": "Staff account not bound to restaurant"}
+    }
+)
+def login(
+    data: LoginRequest,
+    db: Annotated[Session, Depends(get_db)]
+):
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # staff = thiết bị quán → BẮT BUỘC có restaurant_id
+    # staff phải có restaurant
     if user.role == "staff" and not user.restaurant_id:
         raise HTTPException(
             status_code=403,
@@ -53,9 +126,17 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         "restaurant_id": str(user.restaurant_id) if user.restaurant_id else None,
     })
 
-    return {"access_token": token}
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }
+
+
+# =========================
+# GET CURRENT USER
+# =========================
 @router.get("/me")
-def get_me(current_user=Depends(get_current_user)):
+def get_me(current_user: Annotated[User, Depends(get_current_user)]):
     return {
         "id": str(current_user.id),
         "email": current_user.email,
