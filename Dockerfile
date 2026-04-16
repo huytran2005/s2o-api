@@ -12,8 +12,6 @@ RUN pip install --no-cache-dir -r requirements.docker.txt
 
 COPY . .
 
-# Copy entrypoint
-COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 10000

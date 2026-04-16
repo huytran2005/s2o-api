@@ -9,7 +9,8 @@ echo "Starting S2O API container..."
 REQUIRED_VARS="DATABASE_URL RABBITMQ_URL JWT_SECRET_KEY MEDIA_ROOT"
 
 for var in $REQUIRED_VARS; do
-  if [ -z "$(eval echo \$$var)" ]; then
+  eval value=\$$var
+  if [ -z "$value" ]; then
     echo "ERROR: Environment variable $var is not set"
     exit 1
   fi

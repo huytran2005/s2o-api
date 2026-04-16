@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+
 from uuid import UUID
 
 from fastapi import (
@@ -56,6 +57,8 @@ async def list_restaurants(
         ).all()
 
         result.append({
+    return [
+        {
             "id": r.id,
             "name": r.name,
             "description": r.description,
@@ -75,6 +78,10 @@ async def list_restaurants(
     return result
 
 
+            "staff_members": []
+        }
+        for r in restaurants
+    ]
 # ======================
 # CREATE RESTAURANT
 # ======================
@@ -101,6 +108,7 @@ async def create_restaurant(
         "description": restaurant.description,
         "image_preview": restaurant.image_preview,
         "staff_members": []  # ✅ fix schema
+        "staff_members": []
     }
 
 
@@ -115,11 +123,17 @@ async def get_restaurant(
 ):
     cache_key = f"restaurant:{restaurant_id}"
 
-    # CACHE
     cached = await redis_client.get(cache_key)
     if cached:
         response.headers["X-Cache"] = "HIT"
         return json.loads(cached)
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            response.headers["X-Cache"] = "HIT"
+            return json.loads(cached)
+    except Exception:
+        pass
 
     restaurant = db.query(Restaurant).filter(
         Restaurant.id == restaurant_id
@@ -155,6 +169,14 @@ async def get_restaurant(
         CACHE_TTL,
         json.dumps(result, default=str)
     )
+    try:
+        await redis_client.setex(
+            cache_key,
+            CACHE_TTL,
+            json.dumps(result, default=str)
+        )
+    except Exception:
+        pass
 
     response.headers["X-Cache"] = "MISS"
     return result
@@ -187,6 +209,10 @@ async def update_restaurant(
     db.refresh(restaurant)
 
     await redis_client.delete(f"restaurant:{restaurant_id}")
+    try:
+        await redis_client.delete(f"restaurant:{restaurant_id}")
+    except Exception:
+        pass
 
     staff = db.query(User).filter(
         User.restaurant_id == restaurant_id
@@ -230,6 +256,20 @@ async def update_preview_image(
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")
 
+    # VALIDATE FORMAT
+    ALLOWED_TYPES = ["image/jpeg", "image/png", "image/jpg", "image/webp"]
+    if image.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid image format")
+
+    # VALIDATE SIZE
+    contents = await image.read()
+    size = len(contents)
+
+    if size < 100 * 1024 or size > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Invalid image size")
+
+    image.file.seek(0)
+
     old_image = restaurant.image_preview
     new_image = save_restaurant_image(image)
 
@@ -243,6 +283,10 @@ async def update_preview_image(
             pass
 
     await redis_client.delete(f"restaurant:{restaurant_id}")
+    try:
+        await redis_client.delete(f"restaurant:{restaurant_id}")
+    except Exception:
+        pass
 
     return {"image_preview": new_image}
 
@@ -275,5 +319,9 @@ async def delete_restaurant(
     db.commit()
 
     await redis_client.delete(f"restaurant:{restaurant_id}")
+    try:
+        await redis_client.delete(f"restaurant:{restaurant_id}")
+    except Exception:
+        pass
 
     return {"message": "Restaurant deleted"}
